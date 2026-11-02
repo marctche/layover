@@ -1,0 +1,100 @@
+import type { Money } from "../money/money";
+import type { Leg, PriceSource } from "../trip/types";
+
+export type EngineErrorCode =
+  | "invalid_date"
+  | "dates_reversed"
+  | "too_many_cities"
+  | "currency_mismatch"
+  | "unknown_city"
+  | "unknown_traveler"
+  | "duplicate_id"
+  | "invalid_city"
+  | "no_travelers"
+  | "missing_city_costs"
+  | "event_out_of_range"
+  | "invalid_option"
+  | "city_required"
+  | "no_feasible_route"
+  | "traveler_mismatch";
+
+export interface EngineError {
+  code: EngineErrorCode;
+  message: string;
+  path?: string;
+  /** Present only on no_feasible_route. */
+  rejections?: RejectionSummary;
+}
+
+export type RejectionReason =
+  | "missing_leg"
+  | "missing_home_leg"
+  | "min_nights_exceeded"
+  | "no_valid_allocation"
+  | "over_budget";
+
+/**
+ * Counts of pruned branches by reason. A pruned prefix counts once, so these
+ * are not permutation counts. Counts only: no amounts, no traveler ids.
+ */
+export type RejectionSummary = Record<RejectionReason, number>;
+
+export interface Stop {
+  cityId: string;
+  nights: number;
+  firstNight: number;
+  /** Date of the first night. */
+  checkIn: string;
+  /** Date after the last night. */
+  checkOut: string;
+}
+
+export interface TravelerCost {
+  travelerId: string;
+  international: Money;
+  intercity: Money;
+  lodging: Money;
+  daily: Money;
+  total: Money;
+  /** Ceiling minus total. Only this traveler's own entry carries it. */
+  headroom?: Money;
+  priceSources: PriceSource[];
+}
+
+export interface RouteMetrics {
+  totalCostPerTraveler: { travelerId: string; total: Money }[];
+  groupTotal: Money;
+  totalTravelMinutes: number;
+  transfers: number;
+  satisfaction: number;
+  citiesIncluded: string[];
+  citiesExcluded: string[];
+  priceSources: PriceSource[];
+}
+
+export interface RoutePlan {
+  /** City ids in visiting order joined by ">". Unique per plan. */
+  id: string;
+  stops: Stop[];
+  intercityLegs: Leg[];
+  travelerCosts: TravelerCost[];
+  metrics: RouteMetrics;
+}
+
+export type AlternativeLabel = "cheapest" | "most_wanted" | "least_travel" | "pareto_alternative";
+
+export interface RouteAlternative {
+  labels: AlternativeLabel[];
+  route: RoutePlan;
+}
+
+export type RouteOptionsResult =
+  | {
+      ok: true;
+      alternatives: RouteAlternative[];
+      feasibleCount: number;
+      paretoCount: number;
+      rejections: RejectionSummary;
+      stats: { sequencesEvaluated: number; allocationRuns: number };
+    }
+  | { ok: false; errors: EngineError[] };
