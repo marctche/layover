@@ -13,6 +13,17 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
   ]),
+  // Only the data and service layers may talk to Supabase.
+  {
+    files: ["**/*.{ts,tsx}"],
+    ignores: ["src/db/**", "src/server/**", "tests/db/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: ["@supabase/*"], message: "Import Supabase only in src/db or src/server." }] },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

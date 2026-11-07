@@ -44,13 +44,14 @@ tests/
 
 | Table | Holds |
 |---|---|
-| `trips` | Name, date window, status, group target budget (a shared benchmark), base currency |
-| `trip_members` | Trip, user, role (`coordinator` or `member`), home airport |
-| `invitations` | Trip, token hash, expiry, accepted_by |
-| `destinations` | Trip-scoped candidate cities, suggested_by |
-| `destination_preferences` | Member, destination, score |
+| `profiles` | One per auth user: display name. Visible to the user and to people who share a trip with them |
+| `trips` | Name, date window, status, group target budget (a shared benchmark), base currency (always chosen explicitly) |
+| `trip_members` | Trip, user, role (`coordinator` or `member`), home airport. Rows are created and ended only by the `create_trip`, `join_with_invite` and `remove_member` SQL functions, never by direct insert or delete. Removal is coordinator-only and takes the member's preferences and budget with it |
+| `invitations` | Trip, SHA-256 of a 256-bit token (the token itself is never stored), expiry, revoked_at. A reusable link: anyone holding it can join until it expires or is revoked. A member's row records the link they used (`joined_via`) |
+| `destinations` | Trip-scoped candidate cities, suggested_by (kept if the suggester is later removed) |
+| `destination_preferences` | Member, destination, score from -2 to 2. Visible to every member, writable by its owner |
 | `constraints` | Typed rows: fixed event at a city on dates, minimum stay, member availability window |
-| `member_budgets` | Member, ceiling. **Readable by its owner only.** Never joined into group-visible queries |
+| `member_budgets` | Member, ceiling in minor units. **Readable by its owner only.** Never joined into group-visible queries |
 | `quotes` | Origin, destination, mode, date, amount in minor units, currency, source, provider, fetched_at, expires_at |
 | `route_scenarios` | Computed candidates, keyed by a hash of their inputs so results are cached and reproducible |
 | `decision_cards`, `card_responses` | Trigger type, supporting facts (schema-validated JSON), generated question and options, status |
