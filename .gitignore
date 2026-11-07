@@ -46,3 +46,6 @@ next-env.d.ts
 # supabase
 supabase/.temp/
 supabase/.branches/
+
+# SerpApi response cache
+/.cache/
