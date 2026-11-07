@@ -57,6 +57,107 @@ describe("input validation", () => {
   });
 });
 
+describe("value validation", () => {
+  it("rejects a negative leg price", () => {
+    const input = miniTrip();
+    input.legs[4] = { ...input.legs[4]!, pricePerPerson: { price: money(-500_000, "CAD"), source: "manual" } };
+    expect(codes(generateRouteOptions(input))).toEqual(["invalid_leg"]);
+  });
+
+  it("accepts a free leg but rejects zero, negative or non-finite durations", () => {
+    const free = miniTrip();
+    free.legs[4] = { ...free.legs[4]!, pricePerPerson: quote(0) };
+    expect(generateRouteOptions(free).ok).toBe(true);
+    for (const bad of [0, -1000, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const input = miniTrip();
+      input.legs[4] = { ...input.legs[4]!, durationMinutes: bad };
+      expect(codes(generateRouteOptions(input))).toEqual(["invalid_leg"]);
+    }
+  });
+
+  it("rejects negative lodging, daily spend and budget ceilings", () => {
+    const input = miniTrip();
+    input.cityCosts[0] = { ...input.cityCosts[0]!, lodgingPerPersonPerNight: { price: money(-1, "CAD"), source: "manual" } };
+    input.cityCosts[1] = { ...input.cityCosts[1]!, dailySpendPerPerson: { price: money(-1, "CAD"), source: "manual" } };
+    input.travelers[0] = { ...input.travelers[0]!, budgetCeiling: money(-1, "CAD") };
+    expect(codes(generateRouteOptions(input)).sort()).toEqual(["invalid_budget", "invalid_cost", "invalid_cost"]);
+  });
+
+  it("rejects preference scores outside -2..2 or not whole", () => {
+    for (const score of [3, -3, 1.5]) {
+      const input = miniTrip();
+      input.preferences[0] = { ...input.preferences[0]!, score: score as never };
+      expect(codes(generateRouteOptions(input))).toEqual(["invalid_preference"]);
+    }
+  });
+
+  it("rejects two preferences from one traveler for one city", () => {
+    const input = miniTrip();
+    input.preferences.push({ travelerId: "T1", cityId: "A", score: -2 });
+    expect(codes(generateRouteOptions(input))).toEqual(["duplicate_id"]);
+  });
+
+  it("rejects trips longer than MAX_TRIP_NIGHTS", () => {
+    const at = { ...miniTrip(), endDate: "2027-07-31" }; // 60 nights
+    expect(codes(generateRouteOptions(at))).not.toContain("trip_too_long");
+    const over = { ...miniTrip(), endDate: "2027-08-01" }; // 61 nights
+    expect(codes(generateRouteOptions(over))).toContain("trip_too_long");
+  });
+
+  it("names both events when two cities need the group on the same night", () => {
+    const input: TripInput = {
+      ...miniTrip(),
+      fixedEvents: [
+        { id: "e1", cityId: "A", startDate: "2027-06-02", endDate: "2027-06-03", label: "x" },
+        { id: "e2", cityId: "B", startDate: "2027-06-03", endDate: "2027-06-03", label: "y" },
+      ],
+    };
+    const r = generateRouteOptions(input);
+    expect(codes(r)).toEqual(["events_conflict"]);
+    if (!r.ok) expect(r.errors[0]?.message).toMatch(/"e1".*"e2"/);
+  });
+
+  it("allows back-to-back events in different cities", () => {
+    const input: TripInput = {
+      ...miniTrip(),
+      fixedEvents: [
+        { id: "e1", cityId: "A", startDate: "2027-06-02", endDate: "2027-06-02", label: "x" },
+        { id: "e2", cityId: "B", startDate: "2027-06-03", endDate: "2027-06-03", label: "y" },
+      ],
+    };
+    expect(codes(generateRouteOptions(input))).not.toContain("events_conflict");
+  });
+
+  it("rejects a traveler home id that is also a city id", () => {
+    const input = miniTrip();
+    input.travelers[0] = { ...input.travelers[0]!, home: "A" };
+    expect(codes(generateRouteOptions(input))).toContain("home_is_city");
+  });
+});
+
+describe("ids with punctuation", () => {
+  it("handles city ids containing , | > without collisions", () => {
+    const ids = ["a,b", "c", "a", "b,c", "x>y", "E"];
+    const input: TripInput = {
+      currency: "CAD",
+      startDate: "2027-06-01",
+      endDate: "2027-06-09",
+      cities: ids.map((id) => ({ id, name: id, minNights: 1, maxNights: id === "E" ? 8 : 2 })),
+      travelers: [{ id: "T", name: "T", home: "H" }],
+      legs: ids.flatMap((a) => [leg("H", a, 60, 100), leg(a, "H", 60, 100), ...ids.filter((b) => b !== a).map((b) => leg(a, b, 30, 10))]),
+      cityCosts: ids.map((id) => ({ cityId: id, lodgingPerPersonPerNight: quote(50), dailySpendPerPerson: quote(10) })),
+      fixedEvents: [{ id: "e", cityId: "E", startDate: "2027-06-04", endDate: "2027-06-06", label: "e" }],
+      preferences: [],
+      maxAlternatives: 10,
+    };
+    const r = generateRouteOptions(input);
+    if (!r.ok) throw new Error(JSON.stringify(r.errors));
+    const routeIds = r.alternatives.map((a) => a.route.id);
+    expect(new Set(routeIds).size).toBe(routeIds.length);
+    for (const a of r.alternatives) expect(JSON.parse(a.route.id)).toEqual(a.route.stops.map((s) => s.cityId));
+  });
+});
+
 describe("candidate generation", () => {
   it("rejects a route that lacks a leg between consecutive cities, with the reason", () => {
     const input = miniTrip();

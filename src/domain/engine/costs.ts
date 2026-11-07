@@ -11,11 +11,15 @@ import { must } from "./util";
  */
 export const VETO_PENALTY = 10;
 
-const SOURCE_ORDER: PriceSource[] = ["live", "manual", "estimate", "synthetic"];
+/**
+ * Trust order, most trustworthy first. A Record, so adding a PriceSource is a
+ * compile error until it is ranked here; one table serves sorting and ties.
+ */
+export const SOURCE_RANK: Record<PriceSource, number> = { live: 0, manual: 1, estimate: 2, synthetic: 3 };
 
+/** Distinct sources, most trustworthy first. Never drops a source. */
 export function sortSources(sources: Iterable<PriceSource>): PriceSource[] {
-  const set = new Set(sources);
-  return SOURCE_ORDER.filter((s) => set.has(s));
+  return [...new Set(sources)].sort((a, b) => SOURCE_RANK[a] - SOURCE_RANK[b]);
 }
 
 export interface CostInputs {

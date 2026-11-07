@@ -2,7 +2,7 @@ import { dateOfNight, nightIndexOf, nightsBetween } from "../dates/dates";
 import { sumMoney } from "../money/money";
 import type { Leg, Quote, TripInput } from "../trip/types";
 import { allocateNights, type AllocationEvent } from "./allocate";
-import { computeSatisfaction, computeTravelerCosts, sortSources } from "./costs";
+import { computeSatisfaction, computeTravelerCosts, SOURCE_RANK, sortSources } from "./costs";
 import type { RejectionReason, RejectionSummary, RoutePlan, Stop } from "./types";
 import { must } from "./util";
 
@@ -10,11 +10,24 @@ export function emptyRejections(): RejectionSummary {
   return { missing_leg: 0, missing_home_leg: 0, min_nights_exceeded: 0, no_valid_allocation: 0, over_budget: 0 };
 }
 
-function cheaperLeg(a: Leg, b: Leg): Leg {
+const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+// Parsed, not string-compared, so "...00Z", "...00.000Z" and offsets order correctly. Missing or unparseable sorts oldest.
+const fetchedMs = (l: Leg) => {
+  const t = l.pricePerPerson.fetchedAt === undefined ? Number.NaN : Date.parse(l.pricePerPerson.fetchedAt);
+  return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
+};
+
+/**
+ * Cheapest wins; ties go to shorter, then by mode, then the more trustworthy
+ * source, then the newest quote, so the choice never depends on input order.
+ */
+export function cheaperLeg(a: Leg, b: Leg): Leg {
   const d =
     a.pricePerPerson.price.amountMinor - b.pricePerPerson.price.amountMinor ||
     a.durationMinutes - b.durationMinutes ||
-    (a.mode < b.mode ? -1 : a.mode > b.mode ? 1 : 0);
+    cmp(a.mode, b.mode) ||
+    SOURCE_RANK[a.pricePerPerson.source] - SOURCE_RANK[b.pricePerPerson.source] ||
+    fetchedMs(b) - fetchedMs(a);
   return d <= 0 ? a : b;
 }
 
@@ -78,16 +91,17 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
   const stats: SearchStats = { sequencesEvaluated: 0, allocationRuns: 0 };
   const allocCache = new Map<string, Map<string, number> | null>();
   const allocate = (seq: string[]): number[] | null => {
-    const parts: string[] = [];
+    // JSON keeps ids intact: joining with a delimiter collides on ids that contain it.
+    const parts: (string | string[])[] = [];
     let segment: string[] = [];
     for (const id of seq) {
       if (eventCities.has(id)) {
-        parts.push(segment.sort().join(","), id);
+        parts.push(segment.sort(), id);
         segment = [];
       } else segment.push(id);
     }
-    parts.push(segment.sort().join(","));
-    const key = parts.join("|");
+    parts.push(segment.sort());
+    const key = JSON.stringify(parts);
     let hit = allocCache.get(key);
     if (hit === undefined) {
       stats.allocationRuns += 1;
@@ -162,7 +176,7 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
     const intlMinutes = [...homeLegs.values()].reduce((n, [o, i]) => n + o.durationMinutes + i.durationMinutes, 0);
     const included = new Set(seq);
     routes.push({
-      id: seq.join(">"),
+      id: JSON.stringify(seq),
       stops,
       intercityLegs,
       travelerCosts,

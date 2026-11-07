@@ -11,8 +11,8 @@ describe("simulateChange", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const cheapest = r.outcomes.find((o) => o.objective === "cheapest")!;
-    expect(cheapest.baseline?.id).toBe("A>B");
-    expect(cheapest.proposed?.id).toBe("A>B>C");
+    expect(cheapest.baseline?.id).toBe(JSON.stringify(["A", "B"]));
+    expect(cheapest.proposed?.id).toBe(JSON.stringify(["A", "B", "C"]));
     expect(cheapest.baseline?.metrics.groupTotal.amountMinor).toBe(166_000);
     expect(cheapest.proposed?.metrics.groupTotal.amountMinor).toBe(176_000);
 
@@ -39,7 +39,7 @@ describe("simulateChange", () => {
   it("remove is the mirror of add", () => {
     const r = simulateChange(chainTrip(), { type: "remove", cityId: "C" });
     if (!r.ok) throw new Error("expected ok");
-    expect(r.outcomes[0]?.baseline?.id).toBe("A>B>C");
+    expect(r.outcomes[0]?.baseline?.id).toBe(JSON.stringify(["A", "B", "C"]));
     expect(r.outcomes[0]?.comparison?.groupTotalDelta.amountMinor).toBe(-10_000);
   });
 
@@ -83,8 +83,8 @@ describe("compareRoutes", () => {
     if (!r.ok) throw new Error("expected ok");
     expect(r.comparison.groupTotalDelta.amountMinor).toBe(y.metrics.groupTotal.amountMinor - x.metrics.groupTotal.amountMinor);
     expect(r.comparison.travelMinutesDelta).toBe(y.metrics.totalTravelMinutes - x.metrics.totalTravelMinutes);
-    expect(r.comparison.fromId).toBe("A>B");
-    expect(r.comparison.toId).toBe("A>B>C");
+    expect(r.comparison.fromId).toBe(JSON.stringify(["A", "B"]));
+    expect(r.comparison.toId).toBe(JSON.stringify(["A", "B", "C"]));
   });
 
   it("refuses plans for different travelers", () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { miniTrip } from "../../../tests/helpers/builders";
 import { generateRouteOptions } from "./generate";
-import { VETO_PENALTY } from "./costs";
+import { sortSources, VETO_PENALTY } from "./costs";
 
 describe("per-traveler costs", () => {
   it("matches a hand computation to the cent", () => {
@@ -44,5 +44,11 @@ describe("per-traveler costs", () => {
     expect(m.priceSources).toEqual(["synthetic"]);
     // T1: 2*3 + (-2*2 - veto) ; T2: 1*3 + 1*2.
     expect(m.satisfaction).toBe(2 * 3 - 2 * 2 - VETO_PENALTY + 3 + 2);
+  });
+});
+
+describe("sortSources", () => {
+  it("keeps every distinct source, most trustworthy first", () => {
+    expect(sortSources(["synthetic", "live", "estimate", "live", "manual"])).toEqual(["live", "manual", "estimate", "synthetic"]);
   });
 });

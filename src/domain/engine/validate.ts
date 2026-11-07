@@ -4,6 +4,8 @@ import type { TripInput } from "../trip/types";
 import type { EngineError } from "./types";
 
 export const MAX_CANDIDATE_CITIES = 8;
+/** Night allocation grows with the square of trip length; group trips rarely exceed two months. */
+export const MAX_TRIP_NIGHTS = 60;
 
 /** Collects every problem rather than stopping at the first. */
 export function validateInput(input: TripInput): EngineError[] {
@@ -26,14 +28,24 @@ export function validateInput(input: TripInput): EngineError[] {
   if (totalNights !== null && totalNights <= 0) {
     add({ code: "dates_reversed", message: "endDate must be after startDate", path: "endDate" });
   }
+  if (totalNights !== null && totalNights > MAX_TRIP_NIGHTS) {
+    add({
+      code: "trip_too_long",
+      message: `The trip is ${totalNights} nights; the limit is ${MAX_TRIP_NIGHTS}. Shorten the date window or split the trip.`,
+      path: "endDate",
+    });
+  }
 
-  const checkMoney = (m: Money | undefined, path: string) => {
+  const checkMoney = (m: Money | undefined, path: string, negativeCode?: EngineError["code"]) => {
     if (m && m.currency !== input.currency) {
       add({
         code: "currency_mismatch",
         message: `${path} is in ${m.currency} but the trip currency is ${input.currency}`,
         path,
       });
+    }
+    if (m && negativeCode && m.amountMinor < 0) {
+      add({ code: negativeCode, message: `${path} is negative (${m.amountMinor} minor units)`, path });
     }
   };
 
@@ -55,8 +67,15 @@ export function validateInput(input: TripInput): EngineError[] {
   input.travelers.forEach((t, i) => {
     if (travelerIds.has(t.id)) add({ code: "duplicate_id", message: `Duplicate traveler id "${t.id}"`, path: `travelers[${i}]` });
     travelerIds.add(t.id);
+    if (cityIds.has(t.home)) {
+      add({
+        code: "home_is_city",
+        message: `Traveler "${t.id}" has home "${t.home}", which is also a candidate city id; home and city ids must differ`,
+        path: `travelers[${i}].home`,
+      });
+    }
     places.add(t.home);
-    checkMoney(t.budgetCeiling, `travelers[${i}].budgetCeiling`);
+    checkMoney(t.budgetCeiling, `travelers[${i}].budgetCeiling`, "invalid_budget");
   });
 
   input.legs.forEach((l, i) => {
@@ -65,7 +84,10 @@ export function validateInput(input: TripInput): EngineError[] {
         add({ code: "unknown_city", message: `Leg ${i} ${end} "${l[end]}" is neither a city nor a traveler home`, path: `legs[${i}].${end}` });
       }
     }
-    checkMoney(l.pricePerPerson.price, `legs[${i}].pricePerPerson`);
+    checkMoney(l.pricePerPerson.price, `legs[${i}].pricePerPerson`, "invalid_leg");
+    if (!Number.isFinite(l.durationMinutes) || l.durationMinutes <= 0) {
+      add({ code: "invalid_leg", message: `Leg ${i} durationMinutes must be a positive number, got ${l.durationMinutes}`, path: `legs[${i}].durationMinutes` });
+    }
   });
 
   const costed = new Set<string>();
@@ -73,14 +95,24 @@ export function validateInput(input: TripInput): EngineError[] {
     if (!cityIds.has(cc.cityId)) add({ code: "unknown_city", message: `cityCosts references unknown city "${cc.cityId}"`, path: `cityCosts[${i}].cityId` });
     if (costed.has(cc.cityId)) add({ code: "duplicate_id", message: `Duplicate cityCosts for "${cc.cityId}"`, path: `cityCosts[${i}]` });
     costed.add(cc.cityId);
-    checkMoney(cc.lodgingPerPersonPerNight.price, `cityCosts[${i}].lodgingPerPersonPerNight`);
-    checkMoney(cc.dailySpendPerPerson.price, `cityCosts[${i}].dailySpendPerPerson`);
+    checkMoney(cc.lodgingPerPersonPerNight.price, `cityCosts[${i}].lodgingPerPersonPerNight`, "invalid_cost");
+    checkMoney(cc.dailySpendPerPerson.price, `cityCosts[${i}].dailySpendPerPerson`, "invalid_cost");
   });
   for (const id of cityIds) {
     if (!costed.has(id)) add({ code: "missing_city_costs", message: `No cityCosts for "${id}"`, path: "cityCosts" });
   }
 
+  const scored = new Set<string>();
   input.preferences.forEach((p, i) => {
+    const score: number = p.score;
+    if (!Number.isInteger(score) || score < -2 || score > 2) {
+      add({ code: "invalid_preference", message: `Preference score must be an integer from -2 to 2, got ${score}`, path: `preferences[${i}].score` });
+    }
+    const pair = JSON.stringify([p.travelerId, p.cityId]);
+    if (scored.has(pair)) {
+      add({ code: "duplicate_id", message: `Duplicate preference for traveler "${p.travelerId}" and city "${p.cityId}"`, path: `preferences[${i}]` });
+    }
+    scored.add(pair);
     if (!cityIds.has(p.cityId)) add({ code: "unknown_city", message: `Preference references unknown city "${p.cityId}"`, path: `preferences[${i}].cityId` });
     if (!travelerIds.has(p.travelerId)) add({ code: "unknown_traveler", message: `Preference references unknown traveler "${p.travelerId}"`, path: `preferences[${i}].travelerId` });
   });
@@ -111,6 +143,24 @@ export function validateInput(input: TripInput): EngineError[] {
       }
     }
   });
+
+  // Two cities cannot both host the group on the same night.
+  const spans = input.fixedEvents.filter(
+    (e) => isValidIsoDate(e.startDate) && isValidIsoDate(e.endDate) && e.endDate >= e.startDate,
+  );
+  for (let a = 0; a < spans.length; a++) {
+    for (let b = a + 1; b < spans.length; b++) {
+      const x = spans[a]!;
+      const y = spans[b]!;
+      if (x.cityId !== y.cityId && x.startDate <= y.endDate && y.startDate <= x.endDate) {
+        add({
+          code: "events_conflict",
+          message: `Events "${x.id}" (${x.cityId}) and "${y.id}" (${y.cityId}) need the group in two cities on the same night`,
+          path: "fixedEvents",
+        });
+      }
+    }
+  }
 
   const max = input.maxAlternatives;
   if (max !== undefined && (!Number.isInteger(max) || max < 1)) {

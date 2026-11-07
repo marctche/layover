@@ -6,7 +6,7 @@ The key technical decisions behind Layover, with the alternatives that were reje
 
 Trips rarely have more than 8 candidate cities. With a cap of 8, an exact search over subsets and orderings, with pruning, is fast enough and can be fully explained: if a valid route exists, the engine finds it.
 
-**Rejected:** beam search and local search. They scale further but lose that guarantee. Inputs above the cap are rejected with a clear message instead of getting slower.
+**Rejected:** beam search and local search. They scale further but lose that guarantee. Inputs above the cap are rejected with a clear message instead of getting slower. Trip length is capped the same way, at 60 nights, because night allocation grows with the square of trip length: 8 cities over 90 nights took 6.4 seconds.
 
 ## Order-invariant memoization: worst case from 31 s to 1.5 s
 
@@ -44,7 +44,7 @@ Flight data APIs differ widely in access, cost and coverage:
 
 - **Hard limits:** a route that puts any traveler over their budget is rejected, never quietly allowed through. The rejection report gives only counts by reason, with no names or amounts.
 - **Privacy:** budgets are visible only to their owner. Each traveler sees their own room left in the budget. The group sees only how many travelers are over budget, and only when the group has 3 or more members.
-- **Redaction:** every route is redacted for the person viewing it before it leaves the server. Remaining budget room plus the route's cost would reveal someone's exact budget, so it's stripped for everyone but the owner.
+- **Redaction:** every route is redacted for the person viewing it before it leaves the server. Remaining budget room plus the route's cost would reveal someone's exact budget, so it's stripped for everyone but the owner. Each engine result type (a route, a set of options, a simulated change) has its own redaction function, tested by scanning the whole serialized result, so no nested route can slip through.
 
 ## Database tests in CI instead of locally
 

@@ -1,7 +1,8 @@
 export { generateRouteOptions } from "./engine/generate";
-export { compareRoutes, redactForViewer } from "./engine/compare";
+export { compareRoutes } from "./engine/compare";
+export { redactForViewer, redactOptionsForViewer, redactSimulationForViewer } from "./engine/redact";
 export { simulateChange } from "./engine/simulate";
-export { MAX_CANDIDATE_CITIES } from "./engine/validate";
+export { MAX_CANDIDATE_CITIES, MAX_TRIP_NIGHTS } from "./engine/validate";
 export { dateOfNight, isValidIsoDate, nightIndexOf, nightsBetween } from "./dates/dates";
 export type { CompareResult, MoneyDelta, RouteComparison } from "./engine/compare";
 export type { CityChange, ObjectiveOutcome, SimulateResult } from "./engine/simulate";

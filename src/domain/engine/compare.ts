@@ -82,16 +82,3 @@ export function compareRoutes(from: RoutePlan, to: RoutePlan): CompareResult {
     },
   };
 }
-
-/** Strips headroom from every entry except the viewer's own. */
-export function redactForViewer(route: RoutePlan, viewerId: string): RoutePlan {
-  return {
-    ...route,
-    travelerCosts: route.travelerCosts.map((c) => {
-      if (c.travelerId === viewerId) return c;
-      const rest = { ...c };
-      delete rest.headroom;
-      return rest;
-    }),
-  };
-}

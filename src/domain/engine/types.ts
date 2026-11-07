@@ -16,7 +16,14 @@ export type EngineErrorCode =
   | "invalid_option"
   | "city_required"
   | "no_feasible_route"
-  | "traveler_mismatch";
+  | "traveler_mismatch"
+  | "trip_too_long"
+  | "invalid_leg"
+  | "invalid_cost"
+  | "invalid_preference"
+  | "invalid_budget"
+  | "events_conflict"
+  | "home_is_city";
 
 export interface EngineError {
   code: EngineErrorCode;
@@ -73,7 +80,7 @@ export interface RouteMetrics {
 }
 
 export interface RoutePlan {
-  /** City ids in visiting order joined by ">". Unique per plan. */
+  /** JSON array of city ids in visiting order, e.g. `["tokyo","seoul"]`. Unique per plan. */
   id: string;
   stops: Stop[];
   intercityLegs: Leg[];

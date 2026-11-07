@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { asiaDemo } from "../../../tests/fixtures/asia-demo";
 import { miniTrip } from "../../../tests/helpers/builders";
 import { money } from "../money/money";
-import { redactForViewer } from "./compare";
+import { redactForViewer, redactOptionsForViewer, redactSimulationForViewer } from "./redact";
+import { simulateChange } from "./simulate";
 import { generateRouteOptions } from "./generate";
 import type { TripInput } from "../trip/types";
 
@@ -63,5 +64,49 @@ describe("budgets are hard", () => {
     const view = redactForViewer(r.alternatives[0]!.route, "T2");
     expect(view.travelerCosts[0]).not.toHaveProperty("headroom");
     expect(view.travelerCosts[1]?.headroom?.amountMinor).toBe(250_000 - 193_000);
+  });
+
+  // Walks any serialized result and returns every travelerCosts entry in it.
+  function allCosts(value: unknown): { travelerId: string; headroom?: unknown }[] {
+    const found: { travelerId: string; headroom?: unknown }[] = [];
+    const walk = (v: unknown) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === "object") {
+        for (const [k, child] of Object.entries(v)) {
+          if (k === "travelerCosts" && Array.isArray(child)) found.push(...child);
+          walk(child);
+        }
+      }
+    };
+    walk(JSON.parse(JSON.stringify(value)));
+    return found;
+  }
+
+  const ceilings = (input: TripInput) =>
+    input.travelers.reduce((acc, t, i) => withCeiling(acc, t.id, 900_000 + i * 1_000), input);
+
+  it("redactOptionsForViewer leaves only the viewer's headroom in every alternative", () => {
+    const r = generateRouteOptions(ceilings(asiaDemo));
+    if (!r.ok) throw new Error("expected ok");
+    expect(r.alternatives.length).toBeGreaterThan(1);
+    const costs = allCosts(redactOptionsForViewer(r, "bea"));
+    expect(costs.length).toBe(r.alternatives.length * asiaDemo.travelers.length);
+    for (const c of costs) {
+      if (c.travelerId === "bea") expect(c).toHaveProperty("headroom");
+      else expect(c).not.toHaveProperty("headroom");
+    }
+  });
+
+  it("redactSimulationForViewer covers both sides of every objective", () => {
+    const r = simulateChange(ceilings(asiaDemo), { type: "remove", cityId: "seoul" });
+    if (!r.ok) throw new Error("expected ok");
+    const raw = allCosts(r);
+    expect(raw.some((c) => c.travelerId !== "bea" && "headroom" in c)).toBe(true);
+    const costs = allCosts(redactSimulationForViewer(r, "bea"));
+    expect(costs.length).toBe(raw.length);
+    for (const c of costs) {
+      if (c.travelerId === "bea") expect(c).toHaveProperty("headroom");
+      else expect(c).not.toHaveProperty("headroom");
+    }
   });
 });
