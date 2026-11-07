@@ -8,3 +8,4 @@ export type { CompareResult, MoneyDelta, RouteComparison } from "./engine/compar
 export type { CityChange, ObjectiveOutcome, SimulateResult } from "./engine/simulate";
 export type * from "./engine/types";
 export type * from "./trip/types";
+export * as planner from "./planner";
