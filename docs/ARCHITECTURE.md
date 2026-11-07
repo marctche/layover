@@ -88,6 +88,8 @@ Exact search over a capped set is exact and easy to explain. Heuristics like bea
 - **Interface:** `getQuote(leg, date) -> Quote | Missing`.
 - **Sources:** live (a flight API), manual (entered by members), estimate (a distance and mode heuristic) and synthetic (demo data).
 - **Labels:** every quote carries its source and age, and estimates and synthetic prices are never labeled as live.
+- **Verification:** every provider response is checked against the request that produced it: schema, echoed parameters, airports, dates and duration arithmetic. A failed response becomes a missing price, never a zero, and a bad option is dropped without losing the rest of its response.
+- **Suspicious prices:** a price far below its own response or similar routes is held out of route generation until a person confirms it, because a false low price would otherwise win "cheapest" on its own. High prices are used with a warning. Prices are never edited.
 - **Cost controls:** quotes are cached with an expiry per leg type. Duplicate requests are merged, and concurrent provider calls are capped.
 
 ## Portability

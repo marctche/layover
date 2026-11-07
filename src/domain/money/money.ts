@@ -40,11 +40,16 @@ export function sumMoney(items: readonly Money[], currency: CurrencyCode): Money
   return total;
 }
 
+/** Decimal places in the currency's minor unit: 2 for CAD, 0 for JPY. */
+export function minorUnitDigits(currency: CurrencyCode): number {
+  const formatter = new Intl.NumberFormat("en-CA", { style: "currency", currency });
+  return formatter.resolvedOptions().maximumFractionDigits ?? 2;
+}
+
 export function formatMoney(m: Money, locale = "en-CA"): string {
   const formatter = new Intl.NumberFormat(locale, {
     style: "currency",
     currency: m.currency,
   });
-  const digits = formatter.resolvedOptions().maximumFractionDigits ?? 2;
-  return formatter.format(m.amountMinor / 10 ** digits);
+  return formatter.format(m.amountMinor / 10 ** minorUnitDigits(m.currency));
 }
