@@ -44,7 +44,7 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.122.0
 
       # Starts Postgres and Auth and applies every file in supabase/migrations.
       - run: supabase start -x studio,mailpit,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
