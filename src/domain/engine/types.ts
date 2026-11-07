@@ -38,7 +38,8 @@ export type RejectionReason =
   | "missing_home_leg"
   | "min_nights_exceeded"
   | "no_valid_allocation"
-  | "over_budget";
+  | "over_budget"
+  | "order_locked";
 
 /**
  * Counts of pruned branches by reason. A pruned prefix counts once, so these
@@ -63,6 +64,8 @@ export interface TravelerCost {
   lodging: Money;
   daily: Money;
   total: Money;
+  /** Which ticket form produced `international`. */
+  internationalTicket: "one_way_pair" | "fare";
   /** Ceiling minus total. Only this traveler's own entry carries it. */
   headroom?: Money;
   priceSources: PriceSource[];

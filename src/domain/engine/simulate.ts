@@ -35,6 +35,7 @@ function withoutCity(input: TripInput, cityId: string): TripInput {
     ...input,
     cities: input.cities.filter((c) => keepEnd(c.id)),
     legs: input.legs.filter((l) => keepEnd(l.from) && keepEnd(l.to)),
+    longHaulFares: (input.longHaulFares ?? []).filter((f) => keepEnd(f.outboundTo) && keepEnd(f.returnFrom)),
     cityCosts: input.cityCosts.filter((c) => keepEnd(c.cityId)),
     preferences: input.preferences.filter((p) => keepEnd(p.cityId)),
     mustInclude: (input.mustInclude ?? []).filter(keepEnd),
@@ -62,10 +63,16 @@ export function simulateChange(input: TripInput, change: CityChange): SimulateRe
 
   const events = input.fixedEvents.filter((e) => e.cityId === city.id);
   const pinned = (input.mustInclude ?? []).includes(city.id);
-  if (events.length > 0 || pinned) {
+  const lockReasons = [
+    ...((input.lockedOrder ?? []).includes(city.id) ? ["it is in lockedOrder"] : []),
+    ...(input.startCity === city.id ? ["it is the locked startCity"] : []),
+    ...(input.endCity === city.id ? ["it is the locked endCity"] : []),
+  ];
+  if (events.length > 0 || pinned || lockReasons.length > 0) {
     const why = [
       ...events.map((e) => `fixed event "${e.label}" (${e.startDate} to ${e.endDate})`),
       ...(pinned ? ["it is in mustInclude"] : []),
+      ...lockReasons,
     ].join(" and ");
     const message =
       change.type === "remove"

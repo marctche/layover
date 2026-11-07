@@ -2,12 +2,29 @@ import { dateOfNight, nightIndexOf, nightsBetween } from "../dates/dates";
 import { sumMoney } from "../money/money";
 import type { Leg, Quote, TripInput } from "../trip/types";
 import { allocateNights, type AllocationEvent } from "./allocate";
-import { computeSatisfaction, computeTravelerCosts, SOURCE_RANK, sortSources } from "./costs";
+import {
+  betterInternational,
+  computeSatisfaction,
+  computeTravelerCosts,
+  fareCandidate,
+  pairCandidate,
+  SOURCE_RANK,
+  sortSources,
+  type InternationalCandidate,
+  type InternationalOption,
+} from "./costs";
 import type { RejectionReason, RejectionSummary, RoutePlan, Stop } from "./types";
 import { must } from "./util";
 
 export function emptyRejections(): RejectionSummary {
-  return { missing_leg: 0, missing_home_leg: 0, min_nights_exceeded: 0, no_valid_allocation: 0, over_budget: 0 };
+  return {
+    missing_leg: 0,
+    missing_home_leg: 0,
+    min_nights_exceeded: 0,
+    no_valid_allocation: 0,
+    over_budget: 0,
+    order_locked: 0,
+  };
 }
 
 const cmp = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
@@ -58,6 +75,18 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
   }
   const leg = (from: string, to: string) => legs.get(`${from}\u0000${to}`);
 
+  // Fares reduced per (home, outboundTo, returnFrom) with the same order as the
+  // final choice, so duplicates never depend on input order.
+  const fares = new Map<string, InternationalCandidate>();
+  const fareOutbound = new Set<string>();
+  for (const f of input.longHaulFares ?? []) {
+    const key = JSON.stringify([f.home, f.outboundTo, f.returnFrom]);
+    const cand = fareCandidate(f);
+    const prev = fares.get(key);
+    fares.set(key, prev ? betterInternational(prev, cand) : cand);
+    fareOutbound.add(JSON.stringify([f.home, f.outboundTo]));
+  }
+
   const lodging = new Map<string, Quote>(input.cityCosts.map((c) => [c.cityId, c.lodgingPerPersonPerNight]));
   const daily = new Map<string, Quote>(input.cityCosts.map((c) => [c.cityId, c.dailySpendPerPerson]));
 
@@ -69,7 +98,16 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
     firstNight: nightIndexOf(input.startDate, e.startDate),
     lastNight: nightIndexOf(input.startDate, e.endDate),
   }));
-  const required = new Set<string>([...input.fixedEvents.map((e) => e.cityId), ...(input.mustInclude ?? [])]);
+  const lockedOrder = input.lockedOrder ?? [];
+  const lockIndex = new Map(lockedOrder.map((id, i) => [id, i]));
+  const { startCity, endCity } = input;
+  const required = new Set<string>([
+    ...input.fixedEvents.map((e) => e.cityId),
+    ...(input.mustInclude ?? []),
+    ...lockedOrder,
+    ...(startCity !== undefined ? [startCity] : []),
+    ...(endCity !== undefined ? [endCity] : []),
+  ]);
 
   const dateTable = Array.from({ length: total + 1 }, (_, i) => dateOfNight(input.startDate, i));
   const dateAt = (i: number) => must(dateTable[i], "date");
@@ -81,8 +119,35 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
   const routes: RoutePlan[] = [];
   const travelerIds = input.travelers.map((t) => t.id);
 
-  const hasHomeLeg = (cityId: string, direction: "out" | "in") =>
-    input.travelers.every((t) => (direction === "out" ? leg(t.home, cityId) : leg(cityId, t.home)) !== undefined);
+  // Reachable at trip start by a one-way leg or by any fare flying into the city.
+  const canFlyOutTo = (cityId: string) =>
+    input.travelers.every(
+      (t) => leg(t.home, cityId) !== undefined || fareOutbound.has(JSON.stringify([t.home, cityId])),
+    );
+
+  // Best way for one home to fly into `first` and out of `last`; cached per triple.
+  const intlCache = new Map<string, InternationalOption | null>();
+  const internationalFor = (home: string, first: string, last: string): InternationalOption | null => {
+    const key = JSON.stringify([home, first, last]);
+    const hit = intlCache.get(key);
+    if (hit !== undefined) return hit;
+    const out = leg(home, first);
+    const back = leg(last, home);
+    const pair = out && back ? pairCandidate(out, back) : undefined;
+    const fare = fares.get(key);
+    const best = pair && fare ? betterInternational(fare, pair) : (fare ?? pair);
+    const result: InternationalOption | null = best
+      ? {
+          priceMinor: best.priceMinor,
+          outboundMinutes: best.outboundMinutes,
+          returnMinutes: best.returnMinutes,
+          sources: best.sources,
+          ticket: best.ticket,
+        }
+      : null;
+    intlCache.set(key, result);
+    return result;
+  };
 
   // Allocation depends on order only through event coverage, so orderings that
   // differ by permuting non-event cities between event cities share one result.
@@ -128,7 +193,14 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
 
   const evaluate = (seq: string[]) => {
     const last = must(seq[seq.length - 1], "last city");
-    if (!hasHomeLeg(last, "in")) return reject("missing_home_leg");
+    if (endCity !== undefined && last !== endCity) return;
+    const first = must(seq[0], "first city");
+    const international = new Map<string, InternationalOption>();
+    for (const t of input.travelers) {
+      const opt = internationalFor(t.home, first, last);
+      if (!opt) return reject("missing_home_leg");
+      international.set(t.id, opt);
+    }
     stats.sequencesEvaluated += 1;
 
     const allocated = allocate(seq);
@@ -150,17 +222,13 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
     });
 
     const intercityLegs = seq.slice(1).map((id, i) => must(leg(must(seq[i], "city"), id), "intercity leg"));
-    const first = must(seq[0], "first city");
-    const homeLegs = new Map(
-      input.travelers.map((t) => [t.id, [must(leg(t.home, first), "outbound"), must(leg(last, t.home), "inbound")] as const]),
-    );
 
     const travelerCosts = computeTravelerCosts({
       currency: input.currency,
       travelers: input.travelers,
       stops,
       intercityLegs,
-      homeLegs,
+      international,
       lodging,
       daily,
     });
@@ -173,7 +241,7 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
     if (over) return reject("over_budget");
 
     const intercityMinutes = intercityLegs.reduce((n, l) => n + l.durationMinutes, 0);
-    const intlMinutes = [...homeLegs.values()].reduce((n, [o, i]) => n + o.durationMinutes + i.durationMinutes, 0);
+    const intlMinutes = [...international.values()].reduce((n, o) => n + o.outboundMinutes + o.returnMinutes, 0);
     const included = new Set(seq);
     routes.push({
       id: JSON.stringify(seq),
@@ -202,14 +270,28 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
   const inSeq = new Set<string>();
   const extend = (seq: string[], usedMin: number, requiredPlaced: number) => {
     if (seq.length > 0 && requiredPlaced === required.size) evaluate(seq);
+    const prev = seq[seq.length - 1];
+    // The end city is last by definition: nothing may follow it.
+    if (prev !== undefined && prev === endCity) {
+      if (seq.length < cities.length) reject("order_locked");
+      return;
+    }
     for (const c of cities) {
       if (inSeq.has(c.id)) continue;
-      const prev = seq[seq.length - 1];
+      if (prev === undefined && startCity !== undefined && c.id !== startCity) {
+        reject("order_locked");
+        continue;
+      }
+      const lockAt = lockIndex.get(c.id);
+      if (lockAt !== undefined && lockAt > 0 && !inSeq.has(must(lockedOrder[lockAt - 1], "locked predecessor"))) {
+        reject("order_locked");
+        continue;
+      }
       if (prev !== undefined && !leg(prev, c.id)) {
         reject("missing_leg");
         continue;
       }
-      if (prev === undefined && !hasHomeLeg(c.id, "out")) {
+      if (prev === undefined && !canFlyOutTo(c.id)) {
         reject("missing_home_leg");
         continue;
       }

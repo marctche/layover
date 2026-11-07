@@ -55,6 +55,23 @@ export interface Preference {
   score: -2 | -1 | 0 | 1 | 2;
 }
 
+/**
+ * One long-haul ticket covering both directions: home to `outboundTo` at the
+ * start of the trip, `returnFrom` to home at the end (open-jaw when they differ).
+ */
+export interface LongHaulFare {
+  /** Traveler home id. */
+  home: string;
+  /** City id flown into at trip start. */
+  outboundTo: string;
+  /** City id flown home from at trip end. May equal outboundTo only on a one-city route. */
+  returnFrom: string;
+  outboundMinutes: number;
+  returnMinutes: number;
+  /** Price of the whole ticket, both directions. */
+  pricePerPerson: Quote;
+}
+
 export interface TripInput {
   currency: CurrencyCode;
   startDate: string;
@@ -62,9 +79,17 @@ export interface TripInput {
   cities: City[];
   travelers: Traveler[];
   legs: Leg[];
+  /** Optional round-trip / open-jaw tickets, priced against the one-way pair per traveler. */
+  longHaulFares?: LongHaulFare[];
   cityCosts: CityCosts[];
   fixedEvents: FixedEvent[];
   preferences: Preference[];
   mustInclude?: string[];
+  /** Required cities that must appear in exactly this relative order; others may sit between. */
+  lockedOrder?: string[];
+  /** Route must begin here (implies required). */
+  startCity?: string;
+  /** Route must end here (implies required). */
+  endCity?: string;
   maxAlternatives?: number;
 }

@@ -90,6 +90,24 @@ export function validateInput(input: TripInput): EngineError[] {
     }
   });
 
+  const homes = new Set(input.travelers.map((t) => t.home));
+  (input.longHaulFares ?? []).forEach((f, i) => {
+    if (!homes.has(f.home)) {
+      add({ code: "unknown_city", message: `Fare ${i} home "${f.home}" is not any traveler's home`, path: `longHaulFares[${i}].home` });
+    }
+    for (const end of ["outboundTo", "returnFrom"] as const) {
+      if (!cityIds.has(f[end])) {
+        add({ code: "unknown_city", message: `Fare ${i} ${end} "${f[end]}" is not a city id`, path: `longHaulFares[${i}].${end}` });
+      }
+    }
+    checkMoney(f.pricePerPerson.price, `longHaulFares[${i}].pricePerPerson`, "invalid_leg");
+    for (const dir of ["outboundMinutes", "returnMinutes"] as const) {
+      if (!Number.isFinite(f[dir]) || f[dir] <= 0) {
+        add({ code: "invalid_leg", message: `Fare ${i} ${dir} must be a positive number, got ${f[dir]}`, path: `longHaulFares[${i}].${dir}` });
+      }
+    }
+  });
+
   const costed = new Set<string>();
   input.cityCosts.forEach((cc, i) => {
     if (!cityIds.has(cc.cityId)) add({ code: "unknown_city", message: `cityCosts references unknown city "${cc.cityId}"`, path: `cityCosts[${i}].cityId` });
@@ -120,6 +138,34 @@ export function validateInput(input: TripInput): EngineError[] {
   (input.mustInclude ?? []).forEach((id, i) => {
     if (!cityIds.has(id)) add({ code: "unknown_city", message: `mustInclude references unknown city "${id}"`, path: `mustInclude[${i}]` });
   });
+
+  const locked = input.lockedOrder ?? [];
+  const lockSeen = new Set<string>();
+  locked.forEach((id, i) => {
+    if (!cityIds.has(id)) add({ code: "unknown_city", message: `lockedOrder references unknown city "${id}"`, path: `lockedOrder[${i}]` });
+    if (lockSeen.has(id)) add({ code: "duplicate_id", message: `lockedOrder lists "${id}" more than once`, path: `lockedOrder[${i}]` });
+    lockSeen.add(id);
+  });
+  const { startCity, endCity } = input;
+  if (startCity !== undefined && !cityIds.has(startCity)) {
+    add({ code: "unknown_city", message: `startCity references unknown city "${startCity}"`, path: "startCity" });
+  }
+  if (endCity !== undefined && !cityIds.has(endCity)) {
+    add({ code: "unknown_city", message: `endCity references unknown city "${endCity}"`, path: "endCity" });
+  }
+  if (startCity !== undefined && startCity === endCity && input.cities.length > 1) {
+    add({
+      code: "invalid_option",
+      message: `startCity and endCity are both "${startCity}", but a route over ${input.cities.length} candidate cities cannot begin and end in the same city`,
+      path: "endCity",
+    });
+  }
+  if (startCity !== undefined && locked.includes(startCity) && locked[0] !== startCity) {
+    add({ code: "invalid_option", message: `startCity "${startCity}" is in lockedOrder but is not its first entry ("${locked[0]}")`, path: "startCity" });
+  }
+  if (endCity !== undefined && locked.includes(endCity) && locked[locked.length - 1] !== endCity) {
+    add({ code: "invalid_option", message: `endCity "${endCity}" is in lockedOrder but is not its last entry ("${locked[locked.length - 1]}")`, path: "endCity" });
+  }
 
   input.fixedEvents.forEach((e, i) => {
     if (!cityIds.has(e.cityId)) add({ code: "unknown_city", message: `Event "${e.id}" references unknown city "${e.cityId}"`, path: `fixedEvents[${i}].cityId` });

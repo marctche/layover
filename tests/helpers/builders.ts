@@ -1,5 +1,5 @@
 import { money } from "@/domain/money/money";
-import type { Leg, Quote, TripInput } from "@/domain/trip/types";
+import type { Leg, LongHaulFare, Quote, TripInput } from "@/domain/trip/types";
 
 export const quote = (dollars: number): Quote => ({ price: money(dollars * 100, "CAD"), source: "synthetic" });
 
@@ -10,6 +10,53 @@ export const leg = (from: string, to: string, minutes: number, dollars: number, 
   durationMinutes: minutes,
   pricePerPerson: quote(dollars),
 });
+
+/** One ticket covering home > `to` at the start and `from` > home at the end. */
+export const fare = (
+  home: string,
+  to: string,
+  from: string,
+  outMinutes: number,
+  retMinutes: number,
+  dollars: number,
+  source: Quote["source"] = "synthetic",
+): LongHaulFare => ({
+  home,
+  outboundTo: to,
+  returnFrom: from,
+  outboundMinutes: outMinutes,
+  returnMinutes: retMinutes,
+  pricePerPerson: { ...quote(dollars), source },
+});
+
+/**
+ * Three cities (A, B, C), one traveler T from H, 6 nights, every city 2 to 4
+ * nights, intercity legs both ways between all pairs, and NO home legs: callers
+ * add one-way home legs and/or fares. Intercity legs are 60 min, 100.00 CAD.
+ */
+export function triangleTrip(): TripInput {
+  const ids = ["A", "B", "C"];
+  const legs: Leg[] = [];
+  for (const x of ids) for (const y of ids) if (x !== y) legs.push(leg(x, y, 60, 100));
+  return {
+    currency: "CAD",
+    startDate: "2027-06-01",
+    endDate: "2027-06-07",
+    cities: ids.map((id) => ({ id, name: id, minNights: 2, maxNights: 4 })),
+    travelers: [{ id: "T", name: "Solo", home: "H" }],
+    legs,
+    cityCosts: ids.map((cityId) => ({ cityId, lodgingPerPersonPerNight: quote(80), dailySpendPerPerson: quote(50) })),
+    fixedEvents: [],
+    preferences: [],
+  };
+}
+
+/** triangleTrip plus one-way home legs both ways for every city (600 min, 400.00 CAD each). */
+export function triangleWithHomeLegs(): TripInput {
+  const t = triangleTrip();
+  for (const id of ["A", "B", "C"]) t.legs.push(leg("H", id, 600, 400), leg(id, "H", 600, 400));
+  return t;
+}
 
 /**
  * Two cities (A, B), two travelers (T1 from H1, T2 from H2), 5 nights.
