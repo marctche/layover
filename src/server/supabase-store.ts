@@ -1,4 +1,5 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import { z } from "zod";
 import { createServerDb } from "@/db/server";
 import { ServiceError } from "./errors";
 import type {
@@ -11,6 +12,7 @@ import type {
   Role,
   Store,
   TripRow,
+  TripSummary,
 } from "./store";
 
 // Database errors are translated to ServiceError codes. Raw messages are not passed on,
@@ -97,6 +99,47 @@ export function createSupabaseStore(db: SupabaseClient): Store {
       const { data, error } = await db.auth.getUser();
       if (error || !data.user) return null;
       return data.user.id;
+    },
+
+    async getDisplayName(userId) {
+      const row = optional(await db.from("profiles").select("display_name").eq("id", userId).maybeSingle());
+      return row ? (row.display_name as string) : null;
+    },
+
+    async setDisplayName(userId, displayName) {
+      const { data, error } = await db
+        .from("profiles")
+        .update({ display_name: displayName })
+        .eq("id", userId)
+        .select("id");
+      if (error) fail(error);
+      if (!data || data.length !== 1) throw new ServiceError("not_found");
+    },
+
+    async listMyTrips(userId) {
+      const rows = mustList(
+        await db
+          .from("trip_members")
+          .select("role, joined_at, trips(id, name, start_date, end_date)")
+          .eq("user_id", userId)
+          .order("joined_at", { ascending: false }),
+      );
+      return rows.flatMap((r): TripSummary[] => {
+        const trip = r.trips as unknown as { id: string; name: string; start_date: string | null; end_date: string | null } | null;
+        if (!trip) return [];
+        return [{ id: trip.id, name: trip.name, startDate: trip.start_date, endDate: trip.end_date, role: r.role as Role }];
+      });
+    },
+
+    async getInvitePreview(token) {
+      const rows = mustList(await db.rpc("invite_preview", { p_token: token }));
+      const row = rows[0];
+      if (!row) return null;
+      return {
+        tripName: row.trip_name as string,
+        inviterName: row.inviter_name as string,
+        memberCount: row.member_count as number,
+      };
     },
 
     async createTrip(input) {
@@ -214,6 +257,11 @@ export function createSupabaseStore(db: SupabaseClient): Store {
 
     async joinWithInvite(token) {
       const { data, error } = await db.rpc("join_with_invite", { p_token: token });
+      if (error?.message === "already_member") {
+        // The function puts the trip id in the error detail.
+        const tripId = z.uuid().safeParse(error.details);
+        throw new ServiceError("already_member", undefined, tripId.success ? tripId.data : undefined);
+      }
       if (error) fail(error);
       return data as string;
     },
@@ -279,6 +327,22 @@ export function createAuthGateway(db: SupabaseClient): AuthGateway {
     async exchangeCode(code) {
       const { error } = await db.auth.exchangeCodeForSession(code);
       return !error;
+    },
+    async googleSignInUrl(redirectTo) {
+      const { data, error } = await db.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo, skipBrowserRedirect: true },
+      });
+      if (error || !data.url) throw new ServiceError("internal");
+      return data.url;
+    },
+    async verifyEmailCode(email, code) {
+      const { data, error } = await db.auth.verifyOtp({ email, token: code, type: "email" });
+      return !error && data.session !== null;
+    },
+    async signOut() {
+      const { error } = await db.auth.signOut({ scope: "local" });
+      if (error) throw new ServiceError("internal");
     },
   };
 }

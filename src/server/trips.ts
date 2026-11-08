@@ -2,7 +2,22 @@ import { ServiceError } from "./errors";
 import { requireMember, requireUser } from "./access";
 import { requireCoordinator } from "./access";
 import { createTripInput, getTripInput, parseInput, removeMemberInput } from "./schemas";
-import type { BudgetRow, DestinationRow, MemberRow, PreferenceRow, Role, Store, TripRow } from "./store";
+import type {
+  BudgetRow,
+  DestinationRow,
+  MemberRow,
+  PreferenceRow,
+  Role,
+  Store,
+  TripRow,
+  TripSummary,
+} from "./store";
+
+/** The caller's own trips. Needs a signed-in user and takes no input. */
+export async function listMyTrips(store: Store): Promise<TripSummary[]> {
+  const userId = await requireUser(store);
+  return store.listMyTrips(userId);
+}
 
 export async function createTrip(store: Store, raw: unknown): Promise<{ tripId: string }> {
   const input = parseInput(createTripInput, raw);

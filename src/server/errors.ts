@@ -11,9 +11,13 @@ export type ServiceErrorCode =
 export class ServiceError extends Error {
   readonly code: ServiceErrorCode;
 
-  constructor(code: ServiceErrorCode, message?: string) {
+  /** Set on already_member: the trip the caller already belongs to. */
+  readonly tripId?: string;
+
+  constructor(code: ServiceErrorCode, message?: string, tripId?: string) {
     super(message ?? code);
     this.name = "ServiceError";
     this.code = code;
+    this.tripId = tripId;
   }
 }
