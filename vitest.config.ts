@@ -11,6 +11,7 @@ export default defineConfig({
     environment: "node",
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
     // Database tests need a live Postgres and run through `pnpm test:db`.
-    exclude: ["**/node_modules/**", "tests/db/**"],
+    // Real-login tests need a local Supabase stack and run through `pnpm test:auth`.
+    exclude: ["**/node_modules/**", "tests/db/**", "tests/auth/**"],
   },
 });

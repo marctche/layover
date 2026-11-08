@@ -47,11 +47,20 @@ jobs:
           version: 2.122.0
 
       # Starts Postgres and Auth and applies every file in supabase/migrations.
-      - run: supabase start -x studio,mailpit,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
+      # Mailpit stays on: the real-login test reads its sign-in code from there.
+      - run: supabase start -x studio,imgproxy,edge-runtime,logflare,vector,realtime,storage-api,postgres-meta,supavisor
 
       - run: pnpm test:db
         env:
           LAYOVER_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+      # Real email-code logins against the local stack, then row-level security with those sessions.
+      - name: pnpm test:auth
+        run: |
+          eval "$(supabase status -o env)"
+          export LAYOVER_TEST_SUPABASE_URL="$API_URL"
+          export LAYOVER_TEST_SUPABASE_KEY="${PUBLISHABLE_KEY:-$ANON_KEY}"
+          pnpm test:auth
 
       - if: always()
         run: supabase stop

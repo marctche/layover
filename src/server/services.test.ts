@@ -17,6 +17,11 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
   const roles: Record<string, Role> = { [alice]: "coordinator", [bob]: "member" };
   return {
     currentUserId: async () => userId,
+    getDisplayName: async () => "Alex",
+    setDisplayName: vi.fn(async () => {}),
+    listMyTrips: vi.fn(async () => []),
+    getInvitePreview: vi.fn(async () => null),
+    getTripIfMember: vi.fn(async () => null),
     createTrip: vi.fn(async () => tripId),
     removeMember: vi.fn(async () => {}),
     getRole: async (t, u) => (t === tripId ? (roles[u] ?? null) : null),
@@ -271,6 +276,9 @@ describe("magic-link plumbing", () => {
   const gateway = (ok = true): AuthGateway => ({
     sendMagicLink: vi.fn(async () => {}),
     exchangeCode: vi.fn(async () => ok),
+    googleSignInUrl: vi.fn(async () => "https://accounts.example/o/oauth"),
+    verifyEmailCode: vi.fn(async () => ok),
+    signOut: vi.fn(async () => {}),
   });
 
   it("only follows same-site relative paths", () => {

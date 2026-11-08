@@ -44,7 +44,7 @@ tests/
 
 | Table | Holds |
 |---|---|
-| `profiles` | One per auth user: display name. Visible to the user and to people who share a trip with them |
+| `profiles` | One per auth user: display name (empty until the user sets it, or taken from the identity provider). Visible to the user and to people who share a trip with them |
 | `trips` | Name, date window, status, group target budget (a shared benchmark), base currency (always chosen explicitly) |
 | `trip_members` | Trip, user, role (`coordinator` or `member`), home airport. Rows are created and ended only by the `create_trip`, `join_with_invite` and `remove_member` SQL functions, never by direct insert or delete. Removal is coordinator-only and takes the member's preferences and budget with it |
 | `invitations` | Trip, SHA-256 of a 256-bit token (the token itself is never stored), expiry, revoked_at. A reusable link: anyone holding it can join until it expires or is revoked. A member's row records the link they used (`joined_via`) |
@@ -57,6 +57,25 @@ tests/
 | `decision_cards`, `card_responses` | Trigger type, supporting facts (schema-validated JSON), generated question and options, status |
 | `proposals`, `proposal_versions`, `approvals` | A unique (proposal_version, member) key prevents duplicate approvals. State transitions run in a single SQL function or transaction |
 | `itineraries` | Approved versions, immutable once approved |
+
+## Authentication and invites
+
+**Sign-in.** Supabase Auth with two entry points: Google, and an emailed 6-digit code. The same email also carries a link that lands on `/auth/callback`. Server actions make the auth calls (`signInWithOAuth` with `skipBrowserRedirect` returns the provider URL, `verifyOtp` checks the code), and `@supabase/ssr` keeps the session in cookies. The email form gives the same response whether or not an address has an account, and the code step has a resend button that is disabled for 60 seconds.
+
+**Where every sign-in ends.** `/auth/callback` (links and Google) and the code form both hand over to `/auth/continue`, which verifies the user with the auth server, then in order:
+1. sends users without a display name to `/welcome`;
+2. redeems the pending invite, if there is one;
+3. continues to the requested page, or the trip list.
+
+**Onboarding.** A display name is required. New profiles start with an empty name (or the name the identity provider supplied), and every protected page checks on the server that the name is set before it renders.
+
+**Proxy.** `src/proxy.ts` refreshes the session cookies on each matched request and redirects signed-out visitors from protected pages to `/sign-in?next=...`. It is an optimistic check only. Every page and action verifies the user again with `getUser()`, and row-level security backs all data access. The public paths are `/`, `/sign-in`, `/auth/callback`, `/auth/continue`, `/invite-invalid` and `/join/*`.
+
+**Redirect safety.** Every `next` value passes through `safeNextPath`, which accepts only same-site paths: it rejects control characters, whitespace, backslashes and anything that resolves to another origin, and returns the normalized path, query and hash.
+
+**Invite links.** `/join/[token]` works signed out. The `invite_preview` SQL function (security definer, callable by anon) returns only the trip name, the inviter's display name and the member count for a live link. Unknown, expired, revoked and malformed tokens all return the same empty result. The proxy stores the token in a `layover_pending_invite` cookie (httpOnly, SameSite=Lax, Secure in production, one hour), so the token never appears in a `next` parameter or an email redirect. Joining always requires an explicit confirmation, and no GET request changes membership. Opening a link, signing in, and `/auth/continue` only read the cookie and send the user to `/join/confirm`, which shows the same three-field preview with "Join trip" and "Not now" buttons. "Join trip" is a POST server action (Next.js checks the request origin) that redeems the cookie once through `join_with_invite`, clears it whatever the outcome, and lands on the trip. "Not now" clears the cookie without joining. Someone who is already a member goes straight to the trip, checked by `invite_trip_if_member`, which returns a trip id only to a member holding a live link. A link that no longer works shows one neutral message and the cookie is cleared.
+
+**Sessions.** Sign-out ends the session on the current device only.
 
 ## Route engine
 

@@ -16,7 +16,7 @@ const eslintConfig = defineConfig([
   // Only the data and service layers may talk to Supabase.
   {
     files: ["**/*.{ts,tsx}"],
-    ignores: ["src/db/**", "src/server/**", "tests/db/**"],
+    ignores: ["src/db/**", "src/server/**", "tests/db/**", "tests/auth/**"],
     rules: {
       "no-restricted-imports": [
         "error",

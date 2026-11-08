@@ -44,7 +44,32 @@ export interface InviteRow {
   revokedAt: string | null;
 }
 
+export interface TripSummary {
+  id: string;
+  name: string;
+  startDate: string | null;
+  endDate: string | null;
+  role: Role;
+}
+
+/** The only facts a signed-out visitor sees about an invite. */
+export interface InvitePreview {
+  tripName: string;
+  inviterName: string;
+  memberCount: number;
+}
+
 export interface Store {
+  /** The caller's display name. Null when there is no profile row. Empty until onboarding. */
+  getDisplayName(userId: string): Promise<string | null>;
+  setDisplayName(userId: string, displayName: string): Promise<void>;
+  /** Trips the given user belongs to. Row-level security also limits the rows. */
+  listMyTrips(userId: string): Promise<TripSummary[]>;
+  /** Works signed out. Null for unknown, expired, revoked and malformed tokens alike. */
+  getInvitePreview(token: string): Promise<InvitePreview | null>;
+  /** The trip id behind a live invite when the caller already belongs to it, else null. */
+  getTripIfMember(token: string): Promise<string | null>;
+
   /** The authenticated user, verified with the auth server. Null when signed out. */
   currentUserId(): Promise<string | null>;
 
@@ -89,4 +114,10 @@ export interface Store {
 export interface AuthGateway {
   sendMagicLink(email: string, redirectTo: string): Promise<void>;
   exchangeCode(code: string): Promise<boolean>;
+  /** Starts the Google flow and returns the provider URL to send the browser to. */
+  googleSignInUrl(redirectTo: string): Promise<string>;
+  /** True when the code was valid and a session cookie was set. */
+  verifyEmailCode(email: string, code: string): Promise<boolean>;
+  /** Ends the session on this device only. */
+  signOut(): Promise<void>;
 }

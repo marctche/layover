@@ -2,7 +2,14 @@ import { createHash, randomBytes } from "node:crypto";
 import { requireCoordinator, requireUser } from "./access";
 import { ServiceError } from "./errors";
 import { createInviteInput, joinWithInviteInput, parseInput, revokeInviteInput } from "./schemas";
-import type { Store } from "./store";
+import type { InvitePreview, Store } from "./store";
+
+/** What a signed-out visitor may see about an invite. Null when the link is not usable, for any reason. */
+export async function previewInvite(store: Store, raw: unknown): Promise<InvitePreview | null> {
+  const parsed = joinWithInviteInput.safeParse(raw);
+  if (!parsed.success) return null;
+  return store.getInvitePreview(parsed.data.token);
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
