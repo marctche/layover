@@ -119,6 +119,28 @@ describe("invite_preview", () => {
   });
 });
 
+describe("invite_trip_if_member", () => {
+  const tripIfMember = async (token: string) =>
+    (await c.query("select public.invite_trip_if_member($1) as id", [token])).rows[0].id as string | null;
+
+  it("returns the trip only for a member holding a live link", async () => {
+    const token = await inviteAs(c, s.coordinator, s.tripId);
+    await asUser(c, s.bob);
+    expect(await tripIfMember(token)).toBe(s.tripId);
+    await asUser(c, s.outsider);
+    expect(await tripIfMember(token)).toBeNull();
+    expect(await tripIfMember(newToken())).toBeNull();
+    expect(await tripIfMember("short")).toBeNull();
+  });
+
+  it("is not callable signed out", async () => {
+    const token = await inviteAs(c, s.coordinator, s.tripId);
+    await asAnon(c);
+    const res = await attempt(c, "select public.invite_trip_if_member($1)", [token]);
+    expect(res.error?.code).toBe("42501");
+  });
+});
+
 describe("join_with_invite already_member", () => {
   it("reports the trip the member already belongs to in the error detail", async () => {
     const token = await inviteAs(c, s.coordinator, s.tripId);

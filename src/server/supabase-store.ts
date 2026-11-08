@@ -131,6 +131,13 @@ export function createSupabaseStore(db: SupabaseClient): Store {
       });
     },
 
+    async getTripIfMember(token) {
+      const { data, error } = await db.rpc("invite_trip_if_member", { p_token: token });
+      if (error) fail(error);
+      const id = z.uuid().safeParse(data);
+      return id.success ? id.data : null;
+    },
+
     async getInvitePreview(token) {
       const rows = mustList(await db.rpc("invite_preview", { p_token: token }));
       const row = rows[0];

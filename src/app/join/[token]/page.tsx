@@ -19,8 +19,8 @@ async function Join({ params }: { params: PageProps<"/join/[token]">["params"] }
   const { store } = await createRequestServices();
 
   // The proxy has already stored the token in the pending-invite cookie. Someone who is
-  // signed in goes straight to the step that joins the trip.
-  if ((await getSessionState(store)).state !== "signed_out") redirect("/auth/continue");
+  // signed in sees the confirmation page. Opening a link never joins a trip by itself.
+  if ((await getSessionState(store)).state !== "signed_out") redirect("/join/confirm");
 
   const preview = await previewInvite(store, { token });
   if (!preview) return <InviteProblem />;

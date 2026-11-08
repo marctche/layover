@@ -96,3 +96,29 @@ exception
     raise exception 'already_member' using errcode = 'P0001', detail = v_trip::text;
 end;
 $$;
+
+-- For the join confirmation step: the trip id behind a live invite, but only when the caller
+-- is already a member of that trip. Anyone else (and every unusable token) gets null.
+create function public.invite_trip_if_member(p_token text)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select i.trip_id
+  from public.invitations i
+  where app.current_user_id() is not null
+    and p_token is not null
+    and char_length(p_token) between 32 and 256
+    and i.token_hash = encode(sha256(convert_to(p_token, 'UTF8')), 'hex')
+    and i.revoked_at is null
+    and i.expires_at > now()
+    and exists (
+      select 1 from public.trip_members m
+      where m.trip_id = i.trip_id and m.user_id = app.current_user_id()
+    )
+$$;
+
+revoke all on function public.invite_trip_if_member(text) from public, anon;
+grant execute on function public.invite_trip_if_member(text) to authenticated;

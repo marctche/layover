@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { ServiceError } from "./errors";
 import { joinWithInvite } from "./invites";
-import type { Store } from "./store";
+import { requireUser } from "./access";
+import type { InvitePreview, Store } from "./store";
 
 // An invite token waits in this cookie while a visitor signs in. It is never placed in a URL
 // parameter or an email redirect, so it cannot leak through logs, referrers or the email.
@@ -59,5 +60,40 @@ export async function redeemPendingInvite(store: Store, cookieValue: string | un
     if (error.code === "already_member") return { kind: "already_member", tripId: error.tripId ?? null };
     if (error.code === "invite_invalid" || error.code === "invalid_input") return { kind: "invalid" };
     throw error;
+  }
+}
+
+export type ConfirmationState =
+  | { kind: "none" }
+  /** Show the preview and ask before joining. */
+  | { kind: "confirm"; preview: InvitePreview }
+  | { kind: "already_member"; tripId: string }
+  | { kind: "invalid" };
+
+/**
+ * Read-only: works out what the confirmation page should show for the pending cookie.
+ * It never joins a trip. Joining happens only in the confirmation action.
+ */
+export async function resolveInviteConfirmation(store: Store, cookieValue: string | undefined): Promise<ConfirmationState> {
+  if (cookieValue === undefined) return { kind: "none" };
+  await requireUser(store);
+  if (!isInviteTokenShape(cookieValue)) return { kind: "invalid" };
+  const memberOf = await store.getTripIfMember(cookieValue);
+  if (memberOf) return { kind: "already_member", tripId: memberOf };
+  const preview = await store.getInvitePreview(cookieValue);
+  return preview ? { kind: "confirm", preview } : { kind: "invalid" };
+}
+
+/** Where to send the user once a join attempt (or a decline) has been handled. */
+export function inviteOutcomePath(result: RedeemResult | { kind: "declined" }): string {
+  switch (result.kind) {
+    case "joined":
+      return `/trips/${result.tripId}`;
+    case "already_member":
+      return result.tripId ? `/trips/${result.tripId}` : "/trips";
+    case "invalid":
+      return "/invite-invalid";
+    default:
+      return "/trips";
   }
 }

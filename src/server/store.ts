@@ -67,6 +67,8 @@ export interface Store {
   listMyTrips(userId: string): Promise<TripSummary[]>;
   /** Works signed out. Null for unknown, expired, revoked and malformed tokens alike. */
   getInvitePreview(token: string): Promise<InvitePreview | null>;
+  /** The trip id behind a live invite when the caller already belongs to it, else null. */
+  getTripIfMember(token: string): Promise<string | null>;
 
   /** The authenticated user, verified with the auth server. Null when signed out. */
   currentUserId(): Promise<string | null>;

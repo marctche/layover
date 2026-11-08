@@ -16,7 +16,9 @@ import {
   PENDING_INVITE_COOKIE,
   isInviteTokenShape,
   pendingInviteCookie,
+  inviteOutcomePath,
   redeemPendingInvite,
+  resolveInviteConfirmation,
 } from "./pending-invite";
 import { isPublicPath, joinTokenFromPath, signInRedirect } from "./proxy-rules";
 import type { AuthGateway, Store } from "./store";
@@ -296,5 +298,47 @@ describe("proxy rules", () => {
     expect(joinTokenFromPath("/join/")).toBeNull();
     expect(joinTokenFromPath(`/join/${token}/x`)).toBeNull();
     expect(joinTokenFromPath("/trips")).toBeNull();
+  });
+});
+
+describe("invite confirmation (read-only)", () => {
+  const userId = randomUUID();
+  const preview = { tripName: "Asia", inviterName: "Alex", memberCount: 3 };
+  const base = () => ({
+    currentUserId: async () => userId,
+    joinWithInvite: vi.fn(async () => tripId),
+    getTripIfMember: vi.fn(async () => null as string | null),
+    getInvitePreview: vi.fn(async () => preview as typeof preview | null),
+  });
+
+  it("offers the preview and never joins", async () => {
+    const b = base();
+    expect(await resolveInviteConfirmation(store(b), token)).toEqual({ kind: "confirm", preview });
+    expect(b.joinWithInvite).not.toHaveBeenCalled();
+  });
+
+  it("reports an existing membership, an unusable link and no cookie", async () => {
+    const member = base();
+    member.getTripIfMember = vi.fn(async () => tripId);
+    expect(await resolveInviteConfirmation(store(member), token)).toEqual({ kind: "already_member", tripId });
+    const dead = base();
+    dead.getInvitePreview = vi.fn(async () => null);
+    expect(await resolveInviteConfirmation(store(dead), token)).toEqual({ kind: "invalid" });
+    expect(await resolveInviteConfirmation(store(base()), "bad token")).toEqual({ kind: "invalid" });
+    expect(await resolveInviteConfirmation(store(base()), undefined)).toEqual({ kind: "none" });
+    for (const b of [member, dead]) expect(b.joinWithInvite).not.toHaveBeenCalled();
+  });
+
+  it("requires a signed-in user", async () => {
+    await rejectsWith(resolveInviteConfirmation(store({ currentUserId: async () => null }), token), "unauthenticated");
+  });
+
+  it("maps outcomes to pages", () => {
+    expect(inviteOutcomePath({ kind: "joined", tripId })).toBe(`/trips/${tripId}`);
+    expect(inviteOutcomePath({ kind: "already_member", tripId })).toBe(`/trips/${tripId}`);
+    expect(inviteOutcomePath({ kind: "already_member", tripId: null })).toBe("/trips");
+    expect(inviteOutcomePath({ kind: "invalid" })).toBe("/invite-invalid");
+    expect(inviteOutcomePath({ kind: "none" })).toBe("/trips");
+    expect(inviteOutcomePath({ kind: "declined" })).toBe("/trips");
   });
 });

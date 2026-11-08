@@ -3,12 +3,14 @@ import {
   PENDING_INVITE_COOKIE,
   createRequestServices,
   getSessionState,
+  inviteOutcomePath,
   postSignInTarget,
-  redeemPendingInvite,
+  resolveInviteConfirmation,
 } from "@/server";
 
-// Where every sign-in ends. Verifies the user, asks for a name if there is none,
-// joins the trip from a pending invite (once), then goes to the requested page.
+// Where every sign-in ends. Verifies the user, asks for a name if there is none, and sends
+// anyone holding a pending invite to the confirmation page. This route never joins a trip:
+// a GET must not change state, so joining is a separate, explicit POST.
 export async function GET(request: NextRequest) {
   const { origin, searchParams } = request.nextUrl;
   const target = postSignInTarget(searchParams.get("next"));
@@ -22,14 +24,12 @@ export async function GET(request: NextRequest) {
   const pending = request.cookies.get(PENDING_INVITE_COOKIE)?.value;
   if (pending === undefined) return to(target);
 
-  // The token is tried once: the cookie is cleared whatever the outcome.
-  const result = await redeemPendingInvite(store, pending);
-  const response =
-    result.kind === "joined"
-      ? to(`/trips/${result.tripId}`)
-      : result.kind === "already_member"
-        ? to(result.tripId ? `/trips/${result.tripId}` : "/trips")
-        : to("/invite-invalid");
+  const state = await resolveInviteConfirmation(store, pending);
+  if (state.kind === "confirm") return to("/join/confirm");
+  if (state.kind === "none") return to(target);
+
+  // Already a member, or the link no longer works: nothing to confirm, so drop the cookie.
+  const response = to(inviteOutcomePath(state.kind === "already_member" ? { kind: "already_member", tripId: state.tripId } : { kind: "invalid" }));
   response.cookies.set(PENDING_INVITE_COOKIE, "", { path: "/", maxAge: 0, httpOnly: true, sameSite: "lax" });
   return response;
 }

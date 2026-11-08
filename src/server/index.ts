@@ -17,9 +17,12 @@ export {
 } from "./auth";
 export {
   PENDING_INVITE_COOKIE,
+  inviteOutcomePath,
   isInviteTokenShape,
   pendingInviteCookie,
   redeemPendingInvite,
+  resolveInviteConfirmation,
+  type ConfirmationState,
   type RedeemResult,
 } from "./pending-invite";
 export { isPublicPath, joinTokenFromPath, signInRedirect } from "./proxy-rules";

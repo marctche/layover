@@ -21,6 +21,7 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
     setDisplayName: vi.fn(async () => {}),
     listMyTrips: vi.fn(async () => []),
     getInvitePreview: vi.fn(async () => null),
+    getTripIfMember: vi.fn(async () => null),
     createTrip: vi.fn(async () => tripId),
     removeMember: vi.fn(async () => {}),
     getRole: async (t, u) => (t === tripId ? (roles[u] ?? null) : null),
