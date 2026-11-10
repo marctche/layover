@@ -25,7 +25,9 @@ type Services = Store & PlanningStore;
  *   A. a SQL function that returns only fit and headroom per traveler, never the ceiling;
  *   B. a secret-key read inside the server plus redaction of the result.
  * Either would plug in here, as an extra field on the snapshot and `budgetCeiling` on the
- * travelers. Neither is implemented.
+ * travelers. Neither is implemented. Once budgets enter a run, saved results must be
+ * redacted per viewer (see domain/engine/redact.ts) or no longer stored group-visible;
+ * today results carry no headroom, so `runScenario` and `listScenarios` return them as saved.
  */
 export async function loadEngineSnapshot(store: Services, tripId: string): Promise<EngineSnapshot> {
   const trip = await store.getTrip(tripId);

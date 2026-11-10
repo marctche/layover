@@ -45,15 +45,18 @@ tests/
 | Table | Holds |
 |---|---|
 | `profiles` | One per auth user: display name (empty until the user sets it, or taken from the identity provider). Visible to the user and to people who share a trip with them |
-| `trips` | Name, date window, status, group target budget (a shared benchmark), base currency (always chosen explicitly) |
+| `trips` | Name, confirmed start and end dates (both or neither; coordinator-editable while planning), status, group target budget (a shared benchmark), base currency (always chosen explicitly) |
 | `trip_members` | Trip, user, role (`coordinator` or `member`), home airport. Rows are created and ended only by the `create_trip`, `join_with_invite` and `remove_member` SQL functions, never by direct insert or delete. Removal is coordinator-only and takes the member's preferences and budget with it |
 | `invitations` | Trip, SHA-256 of a 256-bit token (the token itself is never stored), expiry, revoked_at. A reusable link: anyone holding it can join until it expires or is revoked. A member's row records the link they used (`joined_via`) |
 | `destinations` | Trip-scoped candidate cities, suggested_by (kept if the suggester is later removed) |
 | `destination_preferences` | Member, destination, score from -2 to 2. Visible to every member, writable by its owner |
-| `constraints` | Typed rows: fixed event at a city on dates, minimum stay, member availability window |
-| `member_budgets` | Member, ceiling in minor units. **Readable by its owner only.** Never joined into group-visible queries |
-| `quotes` | Origin, destination, mode, date, amount in minor units, currency, source, provider, fetched_at, expires_at |
-| `route_scenarios` | Computed candidates, keyed by a hash of their inputs so results are cached and reproducible |
+| `trip_constraints` | One row per trip, written by the coordinator: optional start and end city, departure airport label, and an approximate date window with a length range for trips whose dates are not confirmed. Confirmed dates stay on `trips` |
+| `destination_constraints` | Per destination, coordinator-written: minimum and maximum nights, must-visit, lock position. A destination without a row means at least one night, no maximum, optional |
+| `trip_fixed_events` | A labelled date range the group must spend in one destination |
+| `member_availability`, `member_availability_ranges` | Per member: date ranges they can travel and how many days they can shift. Visible to every member, writable by its owner |
+| `member_budgets` | Member, ceiling in minor units, currency (may differ from the trip's, never converted), optional flexibility above the ceiling. **Readable by its owner only.** Never joined into group-visible queries |
+| `quotes` | Leg or long-haul fare, mode, amount in minor units, currency, adults, source (`live`, `manual`, `estimate`, `synthetic`), provider, fetched_at, expires_at. Members read; the coordinator adds manual quotes only; live, estimate and synthetic rows are written by server code with the secret key |
+| `route_scenarios` | Saved engine runs: exact input, result, input hash and engine version, unique per trip. Immutable. The input never contains budgets |
 | `decision_cards`, `card_responses` | Trigger type, supporting facts (schema-validated JSON), generated question and options, status |
 | `proposals`, `proposal_versions`, `approvals` | A unique (proposal_version, member) key prevents duplicate approvals. State transitions run in a single SQL function or transaction |
 | `itineraries` | Approved versions, immutable once approved |

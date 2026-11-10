@@ -2,9 +2,7 @@
 -- and budget flexibility.
 --
 -- Every table here holds CONFIRMED values only: something a person entered or accepted.
--- Suggested constraints (for example, extracted by AI from a chat) belong in their own
--- tables beside these and are copied in only when a person confirms them, so the engine
--- never runs on an unconfirmed guess.
+-- Suggestions are not stored here.
 
 -- Confirmed trip dates stay on trips (nullable: a trip can exist before dates are known).
 -- Only the coordinator changes them, only these two columns, and only while the trip is
