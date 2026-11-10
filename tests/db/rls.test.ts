@@ -83,14 +83,26 @@ describe("non-members see nothing", () => {
   });
 
   it("lets the coordinator list invitations without any token column", async () => {
-    await inviteAs(c, s.coordinator, s.tripId);
+    // scene() already created two invites (one each for bob and carol), so scope to this one by its hash.
+    const token = await inviteAs(c, s.coordinator, s.tripId);
+    await asAdmin(c);
+    const created = await c.query("select id from public.invitations where token_hash = $1", [sha256Hex(token)]);
+    const createdId = (created.rows[0] as { id: string }).id;
+    const all = await c.query("select id from public.invitations where trip_id = $1", [s.tripId]);
+    expect(all.rowCount).toBe(3);
+
     await asUser(c, s.coordinator);
     const res = await c.query(
       "select id, trip_id, expires_at, revoked_at from public.invitations where trip_id = $1 order by created_at desc",
       [s.tripId],
     );
-    expect(res.rowCount).toBe(1);
-    expect(Object.keys(res.rows[0] as object).sort()).toEqual(["expires_at", "id", "revoked_at", "trip_id"]);
+    // The coordinator sees exactly the trip's three invites, including the one just created, and no others.
+    expect(res.rows.map((r) => (r as { id: string }).id).sort()).toEqual(
+      (all.rows as { id: string }[]).map((r) => r.id).sort(),
+    );
+    const mine = res.rows.find((r) => (r as { id: string }).id === createdId) as object;
+    expect(mine).toBeDefined();
+    expect(Object.keys(mine).sort()).toEqual(["expires_at", "id", "revoked_at", "trip_id"]);
     await asUser(c, s.bob);
     const asMember = await c.query("select id from public.invitations where trip_id = $1", [s.tripId]);
     expect(asMember.rowCount).toBe(0);
