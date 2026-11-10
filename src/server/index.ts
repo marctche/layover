@@ -11,6 +11,7 @@ export {
   setTripConstraints,
   setTripDates,
 } from "./constraints";
+export { addCandidateCity, getPlanView, updateDestinationConstraint, updateTripConstraints, type PlanView } from "./plan";
 export { listScenarios, loadEngineSnapshot, runScenario } from "./scenarios";
 export { buildEngineInput, hashEngineInput, ENGINE_VERSION } from "./engine-input";
 export { suggestDestination, setPreference, setOwnBudget } from "./planning";

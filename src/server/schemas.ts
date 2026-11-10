@@ -201,3 +201,31 @@ export function parseInput<S extends z.ZodType>(schema: S, raw: unknown): z.outp
   }
   return result.data;
 }
+
+// Partial updates for the guided plan flow. The service merges these into the saved row, so a
+// step that edits one field does not clear the others. The merged row is validated again with
+// the full schemas above.
+
+export const updateTripConstraintsInput = z
+  .object({
+    tripId: z.uuid(),
+    departureAirport: airport.nullable().optional(),
+    startDestinationId: z.uuid().nullable().optional(),
+    endDestinationId: z.uuid().nullable().optional(),
+    earliestStart: isoDate.nullable().optional(),
+    latestEnd: isoDate.nullable().optional(),
+    minNights: nights.nullable().optional(),
+    maxNights: nights.nullable().optional(),
+  })
+  .strict();
+
+export const updateDestinationConstraintInput = z
+  .object({
+    tripId: z.uuid(),
+    destinationId: z.uuid(),
+    minNights: nights.optional(),
+    maxNights: nights.nullable().optional(),
+    mustInclude: z.boolean().optional(),
+    lockPosition: z.number().int().min(1).max(100).nullable().optional(),
+  })
+  .strict();
