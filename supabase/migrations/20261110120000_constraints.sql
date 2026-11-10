@@ -1,4 +1,4 @@
--- Planning constraints the route engine reads, plus per-member availability, home airport
+-- Planning constraints the route engine reads, plus per-member availability
 -- and budget flexibility.
 --
 -- Every table here holds CONFIRMED values only: something a person entered or accepted.
