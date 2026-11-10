@@ -30,10 +30,22 @@ async function Trips() {
         </form>
       </header>
       <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Signed in as {displayName}</p>
+      <Link
+        href="/trips/new"
+        className="mt-4 inline-block rounded-md bg-zinc-900 px-4 py-2 font-medium text-white dark:bg-white dark:text-zinc-900"
+      >
+        New trip
+      </Link>
       {trips.length === 0 ? (
-        <p className="mt-8 text-zinc-600 dark:text-zinc-400">
-          You are not on any trips yet. Open an invite link from a friend to join one.
-        </p>
+        <div className="mt-8 text-zinc-600 dark:text-zinc-400">
+          <p>You are not on any trips yet.</p>
+          <p className="mt-2">
+            <Link href="/trips/new" className="underline">
+              Create a trip
+            </Link>
+            , or open an invite link from a friend to join one.
+          </p>
+        </div>
       ) : (
         <ul className="mt-6 divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
           {trips.map((trip) => (

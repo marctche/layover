@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMoney, formatMoney, money, sumMoney } from "./money";
+import { addMoney, formatMoney, minorToMajorString, money, parseMajorToMinor, sumMoney } from "./money";
 
 describe("money()", () => {
   it("constructs a valid amount", () => {
@@ -61,5 +61,36 @@ describe("formatMoney()", () => {
 
   it("formats negative amounts", () => {
     expect(formatMoney(money(-1500, "CAD"))).toContain("15.00");
+  });
+});
+
+describe("parseMajorToMinor()", () => {
+  it.each([
+    ["1200", 120000],
+    ["1,200.50", 120050],
+    [" 0.1 ", 10],
+    ["19.99", 1999],
+  ])("parses %j", (input, expected) => {
+    expect(parseMajorToMinor(input, "CAD")).toBe(expected);
+  });
+
+  it.each(["", "abc", "-5", "1.234", "1e3", "12.", ".5"])("rejects %j", (input) => {
+    expect(parseMajorToMinor(input, "CAD")).toBeNull();
+  });
+
+  it("uses zero decimals for JPY", () => {
+    expect(parseMajorToMinor("5000", "JPY")).toBe(5000);
+    expect(parseMajorToMinor("5000.5", "JPY")).toBeNull();
+  });
+
+  it("rejects amounts beyond the safe integer range", () => {
+    expect(parseMajorToMinor("99999999999999999999", "CAD")).toBeNull();
+  });
+});
+
+describe("minorToMajorString()", () => {
+  it("formats minor units for a form field", () => {
+    expect(minorToMajorString(120050, "CAD")).toBe("1200.50");
+    expect(minorToMajorString(5000, "JPY")).toBe("5000");
   });
 });

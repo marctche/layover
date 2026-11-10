@@ -252,6 +252,16 @@ export function createSupabaseStore(db: SupabaseClient): Store {
       return row ? toInvite(row) : null;
     },
 
+    async listInvites(tripId) {
+      return mustList(
+        await db
+          .from("invitations")
+          .select("id, trip_id, expires_at, revoked_at")
+          .eq("trip_id", tripId)
+          .order("created_at", { ascending: false }),
+      ).map(toInvite);
+    },
+
     async revokeInvite(inviteId) {
       // Zero rows updated means it was already revoked, which is the desired end state.
       const { error } = await db

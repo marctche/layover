@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Other agents' worktrees live here and are not part of this project.
+    ".claude/worktrees/**",
   ]),
   // Only the data and service layers may talk to Supabase.
   {

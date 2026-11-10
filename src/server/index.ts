@@ -1,6 +1,6 @@
 export { ServiceError, type ServiceErrorCode } from "./errors";
 export { createTrip, getTrip, listMyTrips, removeMember, type TripView } from "./trips";
-export { createInvite, revokeInvite, joinWithInvite, previewInvite, hashInviteToken } from "./invites";
+export { createInvite, listInvites, revokeInvite, joinWithInvite, previewInvite, hashInviteToken } from "./invites";
 export { suggestDestination, setPreference, setOwnBudget } from "./planning";
 export {
   completeSignIn,

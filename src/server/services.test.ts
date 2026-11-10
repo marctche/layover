@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { completeSignIn, safeNextPath, signInWithMagicLink } from "./auth";
 import { ServiceError } from "./errors";
-import { createInvite, hashInviteToken, joinWithInvite, revokeInvite } from "./invites";
+import { createInvite, hashInviteToken, listInvites, joinWithInvite, revokeInvite } from "./invites";
 import { setOwnBudget, setPreference, suggestDestination } from "./planning";
 import type { AuthGateway, InviteRow, Role, Store } from "./store";
 import { createTrip, getTrip, removeMember } from "./trips";
@@ -45,6 +45,7 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
       revokedAt: null,
     })),
     getInvite: async (id) => ({ id, tripId, expiresAt: "x", revokedAt: null }),
+    listInvites: vi.fn(async () => []),
     revokeInvite: vi.fn(async () => {}),
     joinWithInvite: vi.fn(async () => tripId),
     insertDestination: vi.fn(async (i) => ({ id: randomUUID(), name: i.name, suggestedBy: i.suggestedBy })),
@@ -199,6 +200,20 @@ describe("invites", () => {
     const coordStore = fakeStore(alice);
     await revokeInvite(coordStore, { inviteId: id });
     expect(coordStore.revokeInvite).toHaveBeenCalledWith(id);
+  });
+
+  it("lists invites for the coordinator only", async () => {
+    const row: InviteRow = { id: randomUUID(), tripId, expiresAt: "2030-01-15T00:00:00.000Z", revokedAt: null };
+    const coordStore = fakeStore(alice, { listInvites: vi.fn(async () => [row]) });
+    const listed = await listInvites(coordStore, { tripId });
+    expect(listed).toEqual([row]);
+    expect(Object.keys(listed[0]!).sort()).toEqual(["expiresAt", "id", "revokedAt", "tripId"]);
+
+    const memberStore = fakeStore(bob);
+    await rejectsWith(listInvites(memberStore, { tripId }), "forbidden");
+    await rejectsWith(listInvites(fakeStore(carol), { tripId }), "not_found");
+    await rejectsWith(listInvites(fakeStore(null), { tripId }), "unauthenticated");
+    expect(memberStore.listInvites).not.toHaveBeenCalled();
   });
 
   it("treats an invisible invite as not_found", async () => {
