@@ -47,3 +47,7 @@ Sign-in offers Google and an emailed 6-digit code (the same email also carries a
 - [docs/PRODUCT.md](docs/PRODUCT.md): problem, core loop, product rules
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): stack, module layout, data model, engine design
 - [docs/DECISIONS.md](docs/DECISIONS.md): key engineering decisions and trade-offs
+
+## Attribution
+
+City search uses data from [GeoNames](https://www.geonames.org/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Regenerate `src/data/cities.json` with `pnpm build-cities`.
