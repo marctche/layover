@@ -53,3 +53,22 @@ export function formatMoney(m: Money, locale = "en-CA"): string {
   });
   return formatter.format(m.amountMinor / 10 ** minorUnitDigits(m.currency));
 }
+
+/**
+ * Parses a decimal amount typed by a person ("1200", "1,200.50") into minor units.
+ * Returns null for anything that is not a non-negative amount with at most the currency's decimals.
+ */
+export function parseMajorToMinor(input: string, currency: CurrencyCode): number | null {
+  const cleaned = input.trim().replace(/[,\s]/g, "");
+  const digits = minorUnitDigits(currency);
+  const pattern = digits === 0 ? /^\d+$/ : new RegExp(`^\\d+(\\.\\d{1,${digits}})?$`);
+  if (!pattern.test(cleaned)) return null;
+  const minor = Math.round(Number(cleaned) * 10 ** digits);
+  return Number.isSafeInteger(minor) ? minor : null;
+}
+
+/** Minor units as a plain decimal string for a form field, without symbol or grouping. */
+export function minorToMajorString(amountMinor: number, currency: CurrencyCode): string {
+  const digits = minorUnitDigits(currency);
+  return (amountMinor / 10 ** digits).toFixed(digits);
+}
