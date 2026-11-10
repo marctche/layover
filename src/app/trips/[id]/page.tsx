@@ -65,6 +65,15 @@ async function Trip({ params }: { params: PageProps<"/trips/[id]">["params"] }) 
         </p>
       </header>
 
+      <p className="mt-6">
+        <Link
+          href={`/trips/${trip.id}/plan`}
+          className="inline-flex min-h-11 items-center rounded-md bg-zinc-900 px-4 font-medium text-white dark:bg-white dark:text-zinc-900"
+        >
+          Plan this trip
+        </Link>
+      </p>
+
       <section aria-labelledby="destinations-heading" className="mt-8">
         <h2 id="destinations-heading" className={sectionHeading}>
           Destinations
