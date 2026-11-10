@@ -35,6 +35,10 @@ export interface PreferenceRow {
 export interface BudgetRow {
   tripId: string;
   ceilingMinor: number;
+  /** May differ from the trip currency. Stored as entered, never converted. */
+  currency: string;
+  /** How far above the ceiling the owner would stretch, in `currency`. */
+  flexibilityMinor: number | null;
 }
 
 export interface InviteRow {
@@ -110,7 +114,13 @@ export interface Store {
     userId: string;
     score: number;
   }): Promise<PreferenceRow>;
-  upsertBudget(input: { tripId: string; userId: string; ceilingMinor: number }): Promise<BudgetRow>;
+  upsertBudget(input: {
+    tripId: string;
+    userId: string;
+    ceilingMinor: number;
+    currency: string;
+    flexibilityMinor: number | null;
+  }): Promise<BudgetRow>;
 }
 
 export interface AuthGateway {
@@ -122,4 +132,113 @@ export interface AuthGateway {
   verifyEmailCode(email: string, code: string): Promise<boolean>;
   /** Ends the session on this device only. */
   signOut(): Promise<void>;
+}
+
+// Planning constraints, quotes and saved engine runs. Kept as a separate contract so the
+// services that do not need it (and their test fakes) stay unchanged.
+
+export interface TripConstraintsRow {
+  departureAirport: string | null;
+  startDestinationId: string | null;
+  endDestinationId: string | null;
+  earliestStart: string | null;
+  latestEnd: string | null;
+  minNights: number | null;
+  maxNights: number | null;
+}
+
+export interface DestinationConstraintRow {
+  destinationId: string;
+  minNights: number;
+  maxNights: number | null;
+  mustInclude: boolean;
+  lockPosition: number | null;
+}
+
+export interface FixedEventRow {
+  id: string;
+  destinationId: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface AvailabilityRow {
+  userId: string;
+  flexibilityDays: number;
+  ranges: { startDate: string; endDate: string }[];
+}
+
+export type QuoteKind = "leg" | "long_haul_fare";
+export type QuoteSource = "live" | "manual" | "estimate" | "synthetic";
+export type TravelMode = "flight" | "train" | "bus";
+
+export interface QuoteRow {
+  id: string;
+  kind: QuoteKind;
+  mode: TravelMode;
+  fromDestinationId: string | null;
+  toDestinationId: string | null;
+  returnFromDestinationId: string | null;
+  originAirport: string | null;
+  destinationAirport: string | null;
+  durationMinutes: number;
+  returnMinutes: number | null;
+  amountMinor: number;
+  currency: string;
+  adults: number;
+  source: QuoteSource;
+  provider: string | null;
+  fetchedAt: string;
+  expiresAt: string | null;
+  createdBy: string | null;
+}
+
+export type NewManualQuote = Omit<QuoteRow, "id" | "source" | "fetchedAt" | "createdBy" | "adults" | "provider"> & {
+  tripId: string;
+  createdBy: string;
+};
+
+export interface ScenarioRow {
+  id: string;
+  engineVersion: string;
+  inputHash: string;
+  ok: boolean;
+  createdBy: string | null;
+  createdAt: string;
+  /** Stored JSON. Written through the app, but a member's session could write any shape. */
+  result: unknown;
+}
+
+export interface PlanningStore {
+  /** Coordinator only in the database. Both null clears the confirmed dates. */
+  setTripDates(tripId: string, startDate: string | null, endDate: string | null): Promise<void>;
+  getTripConstraints(tripId: string): Promise<TripConstraintsRow | null>;
+  upsertTripConstraints(tripId: string, row: TripConstraintsRow): Promise<TripConstraintsRow>;
+  listDestinationConstraints(tripId: string): Promise<DestinationConstraintRow[]>;
+  upsertDestinationConstraint(tripId: string, row: DestinationConstraintRow): Promise<DestinationConstraintRow>;
+  listFixedEvents(tripId: string): Promise<FixedEventRow[]>;
+  insertFixedEvent(tripId: string, event: Omit<FixedEventRow, "id">): Promise<FixedEventRow>;
+  /** Resolves false when no row was removed (unknown id, other trip, or not allowed). */
+  deleteFixedEvent(tripId: string, eventId: string): Promise<boolean>;
+
+  listAvailability(tripId: string): Promise<AvailabilityRow[]>;
+  /** Replaces the caller's own availability atomically. */
+  setMyAvailability(tripId: string, flexibilityDays: number, ranges: { startDate: string; endDate: string }[]): Promise<void>;
+
+  listQuotes(tripId: string): Promise<QuoteRow[]>;
+  insertManualQuote(quote: NewManualQuote): Promise<QuoteRow>;
+  deleteQuote(tripId: string, quoteId: string): Promise<boolean>;
+
+  listScenarios(tripId: string): Promise<ScenarioRow[]>;
+  findScenario(tripId: string, engineVersion: string, inputHash: string): Promise<ScenarioRow | null>;
+  insertScenario(input: {
+    tripId: string;
+    engineVersion: string;
+    inputHash: string;
+    input: unknown;
+    result: unknown;
+    ok: boolean;
+    createdBy: string;
+  }): Promise<ScenarioRow>;
 }

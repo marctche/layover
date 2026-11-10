@@ -1,3 +1,4 @@
+import { ServiceError } from "./errors";
 import { requireMember, requireUser } from "./access";
 import { parseInput, setOwnBudgetInput, setPreferenceInput, suggestDestinationInput } from "./schemas";
 import type { BudgetRow, DestinationRow, PreferenceRow, Store } from "./store";
@@ -21,5 +22,15 @@ export async function setOwnBudget(store: Store, raw: unknown): Promise<BudgetRo
   const input = parseInput(setOwnBudgetInput, raw);
   const userId = await requireUser(store);
   await requireMember(store, input.tripId, userId);
-  return store.upsertBudget({ ...input, userId });
+  // Fields not named keep the caller's saved values; a first write falls back to the trip currency.
+  const [trip, existing] = await Promise.all([store.getTrip(input.tripId), store.getBudget(input.tripId, userId)]);
+  if (!trip) throw new ServiceError("not_found");
+  return store.upsertBudget({
+    tripId: input.tripId,
+    userId,
+    ceilingMinor: input.ceilingMinor,
+    // A currency different from the trip's is kept as entered, never converted.
+    currency: input.currency ?? existing?.currency ?? trip.baseCurrency,
+    flexibilityMinor: input.flexibilityMinor === undefined ? (existing?.flexibilityMinor ?? null) : input.flexibilityMinor,
+  });
 }

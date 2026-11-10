@@ -7,10 +7,17 @@ import type {
   BudgetRow,
   DestinationRow,
   InviteRow,
+  AvailabilityRow,
+  DestinationConstraintRow,
+  FixedEventRow,
   MemberRow,
+  PlanningStore,
   PreferenceRow,
+  QuoteRow,
   Role,
+  ScenarioRow,
   Store,
+  TripConstraintsRow,
   TripRow,
   TripSummary,
 } from "./store";
@@ -32,6 +39,9 @@ function fail(error: PostgrestError): never {
     case "23503":
       throw new ServiceError("not_found");
     case "23514":
+    case "22023": // invalid parameter (set_my_availability)
+    case "22007": // bad date text
+    case "22008":
       throw new ServiceError("invalid_input");
     default:
       throw new ServiceError("internal");
@@ -90,9 +100,77 @@ const toPreference = (r: Row): PreferenceRow => ({
 const toBudget = (r: Row): BudgetRow => ({
   tripId: r.trip_id as string,
   ceilingMinor: r.ceiling_minor as number,
+  currency: r.currency as string,
+  flexibilityMinor: (r.flexibility_minor as number | null) ?? null,
 });
 
-export function createSupabaseStore(db: SupabaseClient): Store {
+const BUDGET_COLUMNS = "trip_id, ceiling_minor, currency, flexibility_minor";
+
+const toTripConstraints = (r: Row): TripConstraintsRow => ({
+  departureAirport: (r.departure_airport as string | null) ?? null,
+  startDestinationId: (r.start_destination_id as string | null) ?? null,
+  endDestinationId: (r.end_destination_id as string | null) ?? null,
+  earliestStart: (r.earliest_start as string | null) ?? null,
+  latestEnd: (r.latest_end as string | null) ?? null,
+  minNights: (r.min_nights as number | null) ?? null,
+  maxNights: (r.max_nights as number | null) ?? null,
+});
+const TRIP_CONSTRAINT_COLUMNS =
+  "departure_airport, start_destination_id, end_destination_id, earliest_start, latest_end, min_nights, max_nights";
+
+const toDestinationConstraint = (r: Row): DestinationConstraintRow => ({
+  destinationId: r.destination_id as string,
+  minNights: r.min_nights as number,
+  maxNights: (r.max_nights as number | null) ?? null,
+  mustInclude: r.must_include as boolean,
+  lockPosition: (r.lock_position as number | null) ?? null,
+});
+const DESTINATION_CONSTRAINT_COLUMNS = "destination_id, min_nights, max_nights, must_include, lock_position";
+
+const toFixedEvent = (r: Row): FixedEventRow => ({
+  id: r.id as string,
+  destinationId: r.destination_id as string,
+  label: r.label as string,
+  startDate: r.start_date as string,
+  endDate: r.end_date as string,
+});
+const FIXED_EVENT_COLUMNS = "id, destination_id, label, start_date, end_date";
+
+const toQuote = (r: Row): QuoteRow => ({
+  id: r.id as string,
+  kind: r.kind as QuoteRow["kind"],
+  mode: r.mode as QuoteRow["mode"],
+  fromDestinationId: (r.from_destination_id as string | null) ?? null,
+  toDestinationId: (r.to_destination_id as string | null) ?? null,
+  returnFromDestinationId: (r.return_from_destination_id as string | null) ?? null,
+  originAirport: (r.origin_airport as string | null) ?? null,
+  destinationAirport: (r.destination_airport as string | null) ?? null,
+  durationMinutes: r.duration_minutes as number,
+  returnMinutes: (r.return_minutes as number | null) ?? null,
+  amountMinor: r.amount_minor as number,
+  currency: r.currency as string,
+  adults: r.adults as number,
+  source: r.source as QuoteRow["source"],
+  provider: (r.provider as string | null) ?? null,
+  fetchedAt: r.fetched_at as string,
+  expiresAt: (r.expires_at as string | null) ?? null,
+  createdBy: (r.created_by as string | null) ?? null,
+});
+const QUOTE_COLUMNS =
+  "id, kind, mode, from_destination_id, to_destination_id, return_from_destination_id, origin_airport, destination_airport, duration_minutes, return_minutes, amount_minor, currency, adults, source, provider, fetched_at, expires_at, created_by";
+
+const toScenario = (r: Row): ScenarioRow => ({
+  id: r.id as string,
+  engineVersion: r.engine_version as string,
+  inputHash: r.input_hash as string,
+  ok: r.ok as boolean,
+  createdBy: (r.created_by as string | null) ?? null,
+  createdAt: r.created_at as string,
+  result: r.result,
+});
+const SCENARIO_COLUMNS = "id, engine_version, input_hash, ok, created_by, created_at, result";
+
+export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
   return {
     async currentUserId() {
       // getUser asks the auth server to validate the token, unlike reading the cookie.
@@ -221,7 +299,7 @@ export function createSupabaseStore(db: SupabaseClient): Store {
       const row = optional(
         await db
           .from("member_budgets")
-          .select("trip_id, ceiling_minor")
+          .select(BUDGET_COLUMNS)
           .eq("trip_id", tripId)
           .eq("user_id", userId)
           .maybeSingle(),
@@ -323,14 +401,231 @@ export function createSupabaseStore(db: SupabaseClient): Store {
               trip_id: input.tripId,
               user_id: input.userId,
               ceiling_minor: input.ceilingMinor,
+              currency: input.currency,
+              flexibility_minor: input.flexibilityMinor,
               updated_at: new Date().toISOString(),
             },
             { onConflict: "trip_id,user_id" },
           )
-          .select("trip_id, ceiling_minor")
+          .select(BUDGET_COLUMNS)
           .single(),
       );
       return toBudget(row);
+    },
+
+    async setTripDates(tripId, startDate, endDate) {
+      const { data, error } = await db
+        .from("trips")
+        .update({ start_date: startDate, end_date: endDate })
+        .eq("id", tripId)
+        .select("id");
+      if (error) fail(error);
+      // No row updated: not the coordinator, or the trip is no longer in planning.
+      if (!data || data.length !== 1) throw new ServiceError("forbidden");
+    },
+
+    async getTripConstraints(tripId) {
+      const row = optional(
+        await db.from("trip_constraints").select(TRIP_CONSTRAINT_COLUMNS).eq("trip_id", tripId).maybeSingle(),
+      );
+      return row ? toTripConstraints(row) : null;
+    },
+
+    async upsertTripConstraints(tripId, c) {
+      const row = must(
+        await db
+          .from("trip_constraints")
+          .upsert(
+            {
+              trip_id: tripId,
+              departure_airport: c.departureAirport,
+              start_destination_id: c.startDestinationId,
+              end_destination_id: c.endDestinationId,
+              earliest_start: c.earliestStart,
+              latest_end: c.latestEnd,
+              min_nights: c.minNights,
+              max_nights: c.maxNights,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "trip_id" },
+          )
+          .select(TRIP_CONSTRAINT_COLUMNS)
+          .single(),
+      );
+      return toTripConstraints(row);
+    },
+
+    async listDestinationConstraints(tripId) {
+      return mustList(
+        await db.from("destination_constraints").select(DESTINATION_CONSTRAINT_COLUMNS).eq("trip_id", tripId),
+      ).map(toDestinationConstraint);
+    },
+
+    async upsertDestinationConstraint(tripId, c) {
+      const row = must(
+        await db
+          .from("destination_constraints")
+          .upsert(
+            {
+              trip_id: tripId,
+              destination_id: c.destinationId,
+              min_nights: c.minNights,
+              max_nights: c.maxNights,
+              must_include: c.mustInclude,
+              lock_position: c.lockPosition,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "destination_id" },
+          )
+          .select(DESTINATION_CONSTRAINT_COLUMNS)
+          .single(),
+      );
+      return toDestinationConstraint(row);
+    },
+
+    async listFixedEvents(tripId) {
+      return mustList(
+        await db.from("trip_fixed_events").select(FIXED_EVENT_COLUMNS).eq("trip_id", tripId).order("start_date"),
+      ).map(toFixedEvent);
+    },
+
+    async insertFixedEvent(tripId, e) {
+      const row = must(
+        await db
+          .from("trip_fixed_events")
+          .insert({
+            trip_id: tripId,
+            destination_id: e.destinationId,
+            label: e.label,
+            start_date: e.startDate,
+            end_date: e.endDate,
+          })
+          .select(FIXED_EVENT_COLUMNS)
+          .single(),
+      );
+      return toFixedEvent(row);
+    },
+
+    async deleteFixedEvent(tripId, eventId) {
+      const { data, error } = await db
+        .from("trip_fixed_events")
+        .delete()
+        .eq("trip_id", tripId)
+        .eq("id", eventId)
+        .select("id");
+      if (error) fail(error);
+      return (data ?? []).length > 0;
+    },
+
+    async listAvailability(tripId) {
+      const people = mustList(
+        await db.from("member_availability").select("user_id, flexibility_days").eq("trip_id", tripId),
+      );
+      const ranges = mustList(
+        await db
+          .from("member_availability_ranges")
+          .select("user_id, start_date, end_date")
+          .eq("trip_id", tripId)
+          .order("start_date"),
+      );
+      return people.map(
+        (p): AvailabilityRow => ({
+          userId: p.user_id as string,
+          flexibilityDays: p.flexibility_days as number,
+          ranges: ranges
+            .filter((r) => r.user_id === p.user_id)
+            .map((r) => ({ startDate: r.start_date as string, endDate: r.end_date as string })),
+        }),
+      );
+    },
+
+    async setMyAvailability(tripId, flexibilityDays, ranges) {
+      const { error } = await db.rpc("set_my_availability", {
+        p_trip_id: tripId,
+        p_flexibility_days: flexibilityDays,
+        p_ranges: ranges.map((r) => ({ start_date: r.startDate, end_date: r.endDate })),
+      });
+      if (error) fail(error);
+    },
+
+    async listQuotes(tripId) {
+      return mustList(await db.from("quotes").select(QUOTE_COLUMNS).eq("trip_id", tripId)).map(toQuote);
+    },
+
+    async insertManualQuote(q) {
+      const row = must(
+        await db
+          .from("quotes")
+          .insert({
+            trip_id: q.tripId,
+            kind: q.kind,
+            mode: q.mode,
+            from_destination_id: q.fromDestinationId,
+            to_destination_id: q.toDestinationId,
+            return_from_destination_id: q.returnFromDestinationId,
+            origin_airport: q.originAirport,
+            destination_airport: q.destinationAirport,
+            duration_minutes: q.durationMinutes,
+            return_minutes: q.returnMinutes,
+            amount_minor: q.amountMinor,
+            currency: q.currency,
+            expires_at: q.expiresAt,
+            // The database accepts only manual here, whatever the caller sends.
+            source: "manual",
+            created_by: q.createdBy,
+          })
+          .select(QUOTE_COLUMNS)
+          .single(),
+      );
+      return toQuote(row);
+    },
+
+    async deleteQuote(tripId, quoteId) {
+      const { data, error } = await db.from("quotes").delete().eq("trip_id", tripId).eq("id", quoteId).select("id");
+      if (error) fail(error);
+      return (data ?? []).length > 0;
+    },
+
+    async listScenarios(tripId) {
+      return mustList(
+        await db
+          .from("route_scenarios")
+          .select(SCENARIO_COLUMNS)
+          .eq("trip_id", tripId)
+          .order("created_at", { ascending: false }),
+      ).map(toScenario);
+    },
+
+    async findScenario(tripId, engineVersion, inputHash) {
+      const row = optional(
+        await db
+          .from("route_scenarios")
+          .select(SCENARIO_COLUMNS)
+          .eq("trip_id", tripId)
+          .eq("engine_version", engineVersion)
+          .eq("input_hash", inputHash)
+          .maybeSingle(),
+      );
+      return row ? toScenario(row) : null;
+    },
+
+    async insertScenario(s) {
+      const row = must(
+        await db
+          .from("route_scenarios")
+          .insert({
+            trip_id: s.tripId,
+            engine_version: s.engineVersion,
+            input_hash: s.inputHash,
+            input: s.input,
+            result: s.result,
+            ok: s.ok,
+            created_by: s.createdBy,
+          })
+          .select(SCENARIO_COLUMNS)
+          .single(),
+      );
+      return toScenario(row);
     },
   };
 }
@@ -365,7 +660,7 @@ export function createAuthGateway(db: SupabaseClient): AuthGateway {
 }
 
 /** Store and auth gateway bound to the current request's session cookie. */
-export async function createRequestServices(): Promise<{ store: Store; auth: AuthGateway }> {
+export async function createRequestServices(): Promise<{ store: Store & PlanningStore; auth: AuthGateway }> {
   const db = await createServerDb();
   return { store: createSupabaseStore(db), auth: createAuthGateway(db) };
 }

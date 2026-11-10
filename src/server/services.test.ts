@@ -50,7 +50,7 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
     joinWithInvite: vi.fn(async () => tripId),
     insertDestination: vi.fn(async (i) => ({ id: randomUUID(), name: i.name, suggestedBy: i.suggestedBy })),
     upsertPreference: vi.fn(async (i) => ({ destinationId: i.destinationId, userId: i.userId, score: i.score })),
-    upsertBudget: vi.fn(async (i) => ({ tripId: i.tripId, ceilingMinor: i.ceilingMinor })),
+    upsertBudget: vi.fn(async (i) => ({ tripId: i.tripId, ceilingMinor: i.ceilingMinor, currency: i.currency, flexibilityMinor: i.flexibilityMinor })),
     ...overrides,
   };
 }
@@ -141,10 +141,13 @@ describe("getTrip", () => {
 
   it("returns the caller's own budget and nothing else", async () => {
     const store = fakeStore(bob, {
-      getBudget: async (t, u) => (u === bob ? { tripId: t, ceilingMinor: 150000 } : { tripId: t, ceilingMinor: 999 }),
+      getBudget: async (t, u) =>
+        u === bob
+          ? { tripId: t, ceilingMinor: 150000, currency: "USD", flexibilityMinor: null }
+          : { tripId: t, ceilingMinor: 999, currency: "USD", flexibilityMinor: null },
     });
     const view = await getTrip(store, { tripId });
-    expect(view.myBudget).toEqual({ tripId, ceilingMinor: 150000 });
+    expect(view.myBudget).toEqual({ tripId, ceilingMinor: 150000, currency: "USD", flexibilityMinor: null });
     expect(JSON.stringify(view)).not.toContain("999");
     expect(view.viewerRole).toBe("member");
   });
@@ -277,7 +280,13 @@ describe("planning writes", () => {
     await suggestDestination(store, { tripId, name: " Seoul " });
     expect(store.insertDestination).toHaveBeenCalledWith({ tripId, name: "Seoul", suggestedBy: bob });
     await setOwnBudget(store, { tripId, ceilingMinor: 250000 });
-    expect(store.upsertBudget).toHaveBeenCalledWith({ tripId, userId: bob, ceilingMinor: 250000 });
+    expect(store.upsertBudget).toHaveBeenCalledWith({
+      tripId,
+      userId: bob,
+      ceilingMinor: 250000,
+      currency: "USD",
+      flexibilityMinor: null,
+    });
   });
 
   it("rejects invalid budgets", async () => {
