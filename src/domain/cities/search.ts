@@ -45,3 +45,11 @@ export function searchCities(cities: readonly City[], query: string, limit: numb
 export function formatCity(city: Pick<City, "name" | "country">): string {
   return `${city.name}, ${city.country}`;
 }
+
+/** Why a city cannot be added to the candidate list, or null when it can. */
+export function checkNewCity(existingNames: readonly string[], name: string, max: number): string | null {
+  const wanted = normalize(name);
+  if (existingNames.some((n) => normalize(n) === wanted)) return `${name} is already on the list.`;
+  if (existingNames.length >= max) return `The list is full: routes can compare at most ${max} cities. Remove one first or plan fewer stops.`;
+  return null;
+}

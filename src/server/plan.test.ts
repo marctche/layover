@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ServiceError } from "./errors";
-import { getPlanView, updateDestinationConstraint, updateTripConstraints } from "./plan";
+import { addCandidateCity, getPlanView, updateDestinationConstraint, updateTripConstraints } from "./plan";
 import type { PlanningStore, Role, Store, TripConstraintsRow } from "./store";
 
 const alice = randomUUID(); // coordinator
@@ -109,5 +109,30 @@ describe("updateDestinationConstraint", () => {
     expect(s.upsertDestinationConstraint).toHaveBeenCalledWith(tripId, { destinationId: seoul, minNights: 2, maxNights: null, mustInclude: false, lockPosition: null });
     expect(await code(updateDestinationConstraint(fake(alice), { tripId, destinationId: randomUUID(), mustInclude: true }))).toBe("not_found");
     expect(await code(updateDestinationConstraint(fake(bob), { tripId, destinationId: tokyo, mustInclude: true }))).toBe("forbidden");
+  });
+});
+
+describe("addCandidateCity", () => {
+  const insert = () => vi.fn(async (i: { name: string; suggestedBy: string }) => ({ id: randomUUID(), name: i.name, suggestedBy: i.suggestedBy }));
+
+  it("lets any member add a city as themselves", async () => {
+    const insertDestination = insert();
+    await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "Paris, France" });
+    expect(insertDestination).toHaveBeenCalledWith({ tripId, name: "Paris, France", suggestedBy: bob });
+  });
+
+  it("refuses a duplicate and a ninth city with a readable conflict", async () => {
+    const insertDestination = insert();
+    const dup = await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "tokyo, japan" }).catch((e: ServiceError) => e);
+    expect(dup).toMatchObject({ code: "conflict" });
+    expect((dup as ServiceError).message).toContain("already on the list");
+    const full = Array.from({ length: 8 }, (_, i) => ({ id: randomUUID(), name: `City ${i}`, suggestedBy: alice }));
+    const ninth = await addCandidateCity(fake(bob, { insertDestination, listDestinations: async () => full }), { tripId, name: "Paris, France" }).catch((e: ServiceError) => e);
+    expect((ninth as ServiceError).message).toContain("at most 8");
+    expect(insertDestination).not.toHaveBeenCalled();
+  });
+
+  it("is not_found for an outsider", async () => {
+    expect(await code(addCandidateCity(fake(eve), { tripId, name: "Paris, France" }))).toBe("not_found");
   });
 });

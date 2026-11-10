@@ -5,13 +5,18 @@ import { setDestinationConstraint, setTripConstraints } from "./constraints";
 import { ServiceError } from "./errors";
 import {
   getTripInput,
+  suggestDestinationInput,
   parseInput,
   updateDestinationConstraintInput,
   updateTripConstraintsInput,
 } from "./schemas";
+import { MAX_CANDIDATE_CITIES } from "@/domain/engine/validate";
+import { checkNewCity } from "@/domain/cities/search";
+import { suggestDestination } from "./planning";
 import { getTrip, type TripView } from "./trips";
 import type {
   AvailabilityRow,
+  DestinationRow,
   DestinationConstraintRow,
   FixedEventRow,
   PlanningStore,
@@ -82,4 +87,18 @@ export async function updateDestinationConstraint(store: Services, raw: unknown)
   const current = (await store.listDestinationConstraints(tripId)).find((c) => c.destinationId === destinationId);
   const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   return setDestinationConstraint(store, { tripId, ...(current ?? { destinationId }), ...defined, destinationId });
+}
+
+/**
+ * Adds a candidate city for any member. Refuses duplicates and a list over the engine's cap with
+ * a conflict whose message is safe to show.
+ */
+export async function addCandidateCity(store: Services, raw: unknown): Promise<DestinationRow> {
+  const input = parseInput(suggestDestinationInput, raw);
+  const userId = await requireUser(store);
+  await requireMember(store, input.tripId, userId);
+  const existing = await store.listDestinations(input.tripId);
+  const problem = checkNewCity(existing.map((d) => d.name), input.name, MAX_CANDIDATE_CITIES);
+  if (problem) throw new ServiceError("conflict", problem);
+  return suggestDestination(store, input);
 }

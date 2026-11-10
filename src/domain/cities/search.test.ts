@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import cities from "@/data/cities.json";
-import { formatCity, normalize, searchCities, type City } from "./search";
+import { checkNewCity, formatCity, normalize, searchCities, type City } from "./search";
 
 const data = cities as City[];
 
@@ -44,5 +44,16 @@ describe("searchCities", () => {
 describe("normalize", () => {
   it("strips accents and punctuation", () => {
     expect(normalize("  São-Paulo ")).toBe("sao paulo");
+  });
+});
+
+describe("checkNewCity", () => {
+  it("blocks duplicates regardless of accents and case", () => {
+    expect(checkNewCity(["Sao Paulo, Brazil"], "SÃO PAULO, brazil", 8)).toContain("already on the list");
+  });
+  it("blocks the ninth city and allows the eighth", () => {
+    const seven = Array.from({ length: 7 }, (_, i) => `City ${i}`);
+    expect(checkNewCity(seven, "Paris, France", 8)).toBeNull();
+    expect(checkNewCity([...seven, "X"], "Paris, France", 8)).toContain("at most 8");
   });
 });
