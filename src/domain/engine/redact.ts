@@ -1,5 +1,5 @@
 import type { SimulateResult } from "./simulate";
-import type { RouteOptionsResult, RoutePlan } from "./types";
+import type { EngineError, RouteOptionsResult, RoutePlan } from "./types";
 
 // Headroom plus a visible total reveals a traveler's private ceiling, so every
 // engine result must pass through one of these before it leaves the server.
@@ -18,8 +18,16 @@ export function redactForViewer(route: RoutePlan, viewerId: string): RoutePlan {
   };
 }
 
+function redactErrorForViewer(error: EngineError, viewerId: string): EngineError {
+  if (!error.dropOptions) return error;
+  return {
+    ...error,
+    dropOptions: error.dropOptions.map((d) => ({ ...d, cheapest: d.cheapest && redactForViewer(d.cheapest, viewerId) })),
+  };
+}
+
 export function redactOptionsForViewer(result: RouteOptionsResult, viewerId: string): RouteOptionsResult {
-  if (!result.ok) return result;
+  if (!result.ok) return { ...result, errors: result.errors.map((e) => redactErrorForViewer(e, viewerId)) };
   return {
     ...result,
     alternatives: result.alternatives.map((a) => ({ ...a, route: redactForViewer(a.route, viewerId) })),
@@ -27,7 +35,7 @@ export function redactOptionsForViewer(result: RouteOptionsResult, viewerId: str
 }
 
 export function redactSimulationForViewer(result: SimulateResult, viewerId: string): SimulateResult {
-  if (!result.ok) return result;
+  if (!result.ok) return { ...result, errors: result.errors.map((e) => redactErrorForViewer(e, viewerId)) };
   return {
     ...result,
     outcomes: result.outcomes.map((o) => ({

@@ -174,8 +174,10 @@ export function buildEngineInput(snap: EngineSnapshot, now: Date): EngineInputRe
       .sort(byKey((p) => JSON.stringify([p.travelerId, p.cityId]))),
   };
 
-  const mustInclude = snap.destinationConstraints.filter((d) => d.mustInclude).map((d) => d.destinationId).sort();
-  if (mustInclude.length > 0) input.mustInclude = mustInclude;
+  // The engine plans exactly the accepted set. Destinations have no accepted/rejected status
+  // yet, so every trip destination counts as accepted and is required. Real accept/reject
+  // arrives with city-addition votes; the per-destination mustInclude flag is subsumed.
+  input.mustInclude = cities.map((c) => c.id);
   const locked = snap.destinationConstraints
     .filter((d) => d.lockPosition !== null)
     .sort((a, b) => (a.lockPosition as number) - (b.lockPosition as number))
