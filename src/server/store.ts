@@ -97,6 +97,8 @@ export interface Store {
     expiresAt: string;
   }): Promise<InviteRow>;
   getInvite(inviteId: string): Promise<InviteRow | null>;
+  /** Invitations for a trip, newest first. Row-level security returns rows only to the coordinator. Never includes token hashes. */
+  listInvites(tripId: string): Promise<InviteRow[]>;
   revokeInvite(inviteId: string): Promise<void>;
   /** Hashing and all checks happen in the database. Throws ServiceError. */
   joinWithInvite(token: string): Promise<string>;

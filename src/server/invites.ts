@@ -1,8 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { requireCoordinator, requireUser } from "./access";
 import { ServiceError } from "./errors";
-import { createInviteInput, joinWithInviteInput, parseInput, revokeInviteInput } from "./schemas";
-import type { InvitePreview, Store } from "./store";
+import { createInviteInput, getTripInput, joinWithInviteInput, parseInput, revokeInviteInput } from "./schemas";
+import type { InvitePreview, InviteRow, Store } from "./store";
 
 /** What a signed-out visitor may see about an invite. Null when the link is not usable, for any reason. */
 export async function previewInvite(store: Store, raw: unknown): Promise<InvitePreview | null> {
@@ -37,6 +37,14 @@ export async function createInvite(
     expiresAt: new Date(now().getTime() + expiresInDays * DAY_MS).toISOString(),
   });
   return { inviteId: row.id, token, expiresAt: row.expiresAt };
+}
+
+/** Coordinator only. Returns ids and dates, never token hashes or tokens. */
+export async function listInvites(store: Store, raw: unknown): Promise<InviteRow[]> {
+  const { tripId } = parseInput(getTripInput, raw);
+  const userId = await requireUser(store);
+  await requireCoordinator(store, tripId, userId);
+  return store.listInvites(tripId);
 }
 
 export async function revokeInvite(store: Store, raw: unknown): Promise<void> {

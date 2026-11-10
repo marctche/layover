@@ -82,6 +82,20 @@ describe("non-members see nothing", () => {
     expect(await count("member_budgets")).toBe(0);
   });
 
+  it("lets the coordinator list invitations without any token column", async () => {
+    await inviteAs(c, s.coordinator, s.tripId);
+    await asUser(c, s.coordinator);
+    const res = await c.query(
+      "select id, trip_id, expires_at, revoked_at from public.invitations where trip_id = $1 order by created_at desc",
+      [s.tripId],
+    );
+    expect(res.rowCount).toBe(1);
+    expect(Object.keys(res.rows[0] as object).sort()).toEqual(["expires_at", "id", "revoked_at", "trip_id"]);
+    await asUser(c, s.bob);
+    const asMember = await c.query("select id from public.invitations where trip_id = $1", [s.tripId]);
+    expect(asMember.rowCount).toBe(0);
+  });
+
   it("does not see invitations as a plain member either", async () => {
     await asUser(c, s.bob);
     expect(await count("invitations")).toBe(0);
