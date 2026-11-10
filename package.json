@@ -13,7 +13,9 @@
     "test:auth": "vitest run --config vitest.auth.config.ts",
     "test:watch": "vitest",
     "typecheck": "next typegen && tsc --noEmit",
-    "price-trip": "tsx scripts/price-trip.ts"
+    "price-trip": "tsx scripts/price-trip.ts",
+    "build-cities": "tsx scripts/build-cities.ts",
+    "build-cities": "tsx scripts/build-cities.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
