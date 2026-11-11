@@ -1,6 +1,8 @@
 // The data layer the services depend on. Implemented over Supabase in supabase-store.ts
 // and replaced by an in-memory fake in tests.
 
+import type { BudgetBand } from "@/domain/budget/bands";
+
 export type Role = "coordinator" | "member";
 
 export interface TripRow {
@@ -37,7 +39,10 @@ export interface PreferenceRow {
 
 export interface BudgetRow {
   tripId: string;
-  ceilingMinor: number;
+  /** The chosen budget band. Null only for rows written before bands existed. */
+  band: BudgetBand | null;
+  /** The band's top in `currency`. Null for the open-ended band (no ceiling). */
+  ceilingMinor: number | null;
   /** May differ from the trip currency. Stored as entered, never converted. */
   currency: string;
   /** How far above the ceiling the owner would stretch, in `currency`. */
@@ -64,6 +69,11 @@ export interface InvitePreview {
   tripName: string;
   inviterName: string;
   memberCount: number;
+  /** Null until the coordinator sets dates. */
+  startDate: string | null;
+  endDate: string | null;
+  /** IATA code, null until the coordinator sets it. */
+  departureAirport: string | null;
 }
 
 export interface Store {
@@ -111,6 +121,8 @@ export interface Store {
   joinWithInvite(token: string): Promise<string>;
 
   insertDestination(input: { tripId: string; name: string; suggestedBy: string; lat?: number; lng?: number }): Promise<DestinationRow>;
+  /** Coordinator only in the database. Resolves false when no row was removed. Dependent rows cascade. */
+  deleteDestination(tripId: string, destinationId: string): Promise<boolean>;
   upsertPreference(input: {
     tripId: string;
     destinationId: string;
@@ -120,7 +132,8 @@ export interface Store {
   upsertBudget(input: {
     tripId: string;
     userId: string;
-    ceilingMinor: number;
+    band: BudgetBand;
+    ceilingMinor: number | null;
     currency: string;
     flexibilityMinor: number | null;
   }): Promise<BudgetRow>;

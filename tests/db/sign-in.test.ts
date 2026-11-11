@@ -33,6 +33,7 @@ afterEach(async () => {
   await c.query("rollback");
 });
 
+const PREVIEW_FIELDS = ["trip_name", "inviter_name", "member_count", "start_date", "end_date", "departure_airport"];
 const preview = (token: string) => c.query("select * from public.invite_preview($1)", [token]);
 
 async function setName(userId: string, name: string) {
@@ -41,14 +42,28 @@ async function setName(userId: string, name: string) {
 }
 
 describe("invite_preview", () => {
-  it("returns exactly the trip name, inviter name and member count for a live invite", async () => {
+  it("returns exactly the trip name, inviter, member count, dates and departure airport for a live invite", async () => {
     await setName(s.coordinator, "Alex");
     const token = await inviteAs(c, s.coordinator, s.tripId);
 
     await asAnon(c);
     const res = await preview(token);
-    expect(res.fields.map((f) => f.name)).toEqual(["trip_name", "inviter_name", "member_count"]);
-    expect(res.rows).toEqual([{ trip_name: "Asia", inviter_name: "Alex", member_count: 3 }]);
+    expect(res.fields.map((f) => f.name)).toEqual(PREVIEW_FIELDS);
+    expect(res.rows).toEqual([{ trip_name: "Asia", inviter_name: "Alex", member_count: 3, start_date: null, end_date: null, departure_airport: null }]);
+  });
+
+  it("returns the dates and departure airport once the coordinator has set them", async () => {
+    const token = await inviteAs(c, s.coordinator, s.tripId);
+    await asUser(c, s.coordinator);
+    await c.query("update public.trips set start_date = '2027-03-01', end_date = '2027-03-15' where id = $1", [s.tripId]);
+    await c.query("insert into public.trip_constraints (trip_id, departure_airport) values ($1, 'YYZ')", [s.tripId]);
+
+    await asAnon(c);
+    const res = await preview(token);
+    expect(res.rowCount).toBe(1);
+    expect(res.rows[0]).toMatchObject({ trip_name: "Asia", member_count: 3, departure_airport: "YYZ" });
+    expect(String(res.rows[0].start_date)).toContain("2027");
+    expect(String(res.rows[0].end_date)).toContain("2027");
   });
 
   it("is callable signed out and signed in, and names the person who made the link", async () => {
@@ -65,7 +80,7 @@ describe("invite_preview", () => {
     for (const act of [() => asAnon(c), () => asUser(c, s.outsider), () => asUser(c, s.bob)]) {
       await act();
       const res = await preview(token);
-      expect(res.rows).toEqual([{ trip_name: "Asia", inviter_name: "Bobby", member_count: 3 }]);
+      expect(res.rows).toEqual([{ trip_name: "Asia", inviter_name: "Bobby", member_count: 3, start_date: null, end_date: null, departure_airport: null }]);
     }
   });
 
@@ -97,7 +112,7 @@ describe("invite_preview", () => {
     for (const res of results) {
       expect(res.rowCount).toBe(0);
       expect(res.rows).toEqual([]);
-      expect(res.fields.map((f) => f.name)).toEqual(["trip_name", "inviter_name", "member_count"]);
+      expect(res.fields.map((f) => f.name)).toEqual(PREVIEW_FIELDS);
     }
   });
 

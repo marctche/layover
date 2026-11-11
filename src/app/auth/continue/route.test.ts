@@ -28,7 +28,7 @@ beforeEach(() => {
     getDisplayName: async () => "Sam",
     joinWithInvite: vi.fn(async () => tripId),
     getTripIfMember: vi.fn(async () => null),
-    getInvitePreview: vi.fn(async () => ({ tripName: "Asia", inviterName: "Alex", memberCount: 3 })),
+    getInvitePreview: vi.fn(async () => ({ tripName: "Asia", inviterName: "Alex", memberCount: 3, startDate: null, endDate: null, departureAirport: null })),
   };
 });
 

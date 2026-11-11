@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { completeSignIn, safeNextPath, signInWithMagicLink } from "./auth";
 import { ServiceError } from "./errors";
 import { createInvite, hashInviteToken, listInvites, joinWithInvite, revokeInvite } from "./invites";
-import { setOwnBudget, setPreference, suggestDestination } from "./planning";
+import { setOwnBudgetBand, setPreference, suggestDestination } from "./planning";
 import type { AuthGateway, InviteRow, Role, Store } from "./store";
 import { createTrip, getTrip, removeMember } from "./trips";
 
@@ -50,7 +50,8 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
     joinWithInvite: vi.fn(async () => tripId),
     insertDestination: vi.fn(async (i) => ({ id: randomUUID(), name: i.name, suggestedBy: i.suggestedBy })),
     upsertPreference: vi.fn(async (i) => ({ destinationId: i.destinationId, userId: i.userId, score: i.score })),
-    upsertBudget: vi.fn(async (i) => ({ tripId: i.tripId, ceilingMinor: i.ceilingMinor, currency: i.currency, flexibilityMinor: i.flexibilityMinor })),
+    deleteDestination: vi.fn(async () => true),
+    upsertBudget: vi.fn(async (i) => ({ tripId: i.tripId, band: i.band, ceilingMinor: i.ceilingMinor, currency: i.currency, flexibilityMinor: i.flexibilityMinor })),
     ...overrides,
   };
 }
@@ -85,7 +86,7 @@ describe("input validation", () => {
   it("rejects a client-supplied role or user id", async () => {
     const store = fakeStore(bob);
     await rejectsWith(createTrip(store, { name: "x", baseCurrency: "USD", role: "coordinator" }), "invalid_input");
-    await rejectsWith(setOwnBudget(store, { tripId, ceilingMinor: 1, userId: alice }), "invalid_input");
+    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", userId: alice }), "invalid_input");
     await rejectsWith(suggestDestination(store, { tripId, name: "Kyoto", suggestedBy: alice }), "invalid_input");
   });
 
@@ -143,11 +144,11 @@ describe("getTrip", () => {
     const store = fakeStore(bob, {
       getBudget: async (t, u) =>
         u === bob
-          ? { tripId: t, ceilingMinor: 150000, currency: "USD", flexibilityMinor: null }
-          : { tripId: t, ceilingMinor: 999, currency: "USD", flexibilityMinor: null },
+          ? { tripId: t, band: "3k_4k" as const, ceilingMinor: 150000, currency: "USD", flexibilityMinor: null }
+          : { tripId: t, band: null, ceilingMinor: 999, currency: "USD", flexibilityMinor: null },
     });
     const view = await getTrip(store, { tripId });
-    expect(view.myBudget).toEqual({ tripId, ceilingMinor: 150000, currency: "USD", flexibilityMinor: null });
+    expect(view.myBudget).toEqual({ tripId, band: "3k_4k", ceilingMinor: 150000, currency: "USD", flexibilityMinor: null });
     expect(JSON.stringify(view)).not.toContain("999");
     expect(view.viewerRole).toBe("member");
   });
@@ -270,7 +271,7 @@ describe("planning writes", () => {
     const store = fakeStore(carol);
     await rejectsWith(suggestDestination(store, { tripId, name: "Seoul" }), "not_found");
     await rejectsWith(setPreference(store, { tripId, destinationId: randomUUID(), score: 1 }), "not_found");
-    await rejectsWith(setOwnBudget(store, { tripId, ceilingMinor: 1 }), "not_found");
+    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k" }), "not_found");
     expect(store.insertDestination).not.toHaveBeenCalled();
     expect(store.upsertBudget).not.toHaveBeenCalled();
   });
@@ -279,20 +280,36 @@ describe("planning writes", () => {
     const store = fakeStore(bob);
     await suggestDestination(store, { tripId, name: " Seoul " });
     expect(store.insertDestination).toHaveBeenCalledWith({ tripId, name: "Seoul", suggestedBy: bob });
-    await setOwnBudget(store, { tripId, ceilingMinor: 250000 });
+    await setOwnBudgetBand(store, { tripId, band: "2k_3k" });
     expect(store.upsertBudget).toHaveBeenCalledWith({
       tripId,
       userId: bob,
-      ceilingMinor: 250000,
+      band: "2k_3k",
+      ceilingMinor: 300000,
       currency: "USD",
       flexibilityMinor: null,
     });
   });
 
-  it("rejects invalid budgets", async () => {
+  it("writes no ceiling for the open-ended band", async () => {
     const store = fakeStore(bob);
-    await rejectsWith(setOwnBudget(store, { tripId, ceilingMinor: -5 }), "invalid_input");
-    await rejectsWith(setOwnBudget(store, { tripId, ceilingMinor: 10.5 }), "invalid_input");
+    await setOwnBudgetBand(store, { tripId, band: "4k_plus" });
+    expect(store.upsertBudget).toHaveBeenCalledWith(expect.objectContaining({ band: "4k_plus", ceilingMinor: null }));
+  });
+
+  it("lets the coordinator set their own band like any member", async () => {
+    const store = fakeStore(alice);
+    await setOwnBudgetBand(store, { tripId, band: "under_2k" });
+    expect(store.upsertBudget).toHaveBeenCalledWith(expect.objectContaining({ userId: alice, band: "under_2k" }));
+  });
+
+  it("rejects bands that do not exist and any client-supplied amount or currency", async () => {
+    const store = fakeStore(bob);
+    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "5k_plus" }), "invalid_input");
+    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", ceilingMinor: 987654321 }), "invalid_input");
+    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", currency: "JPY" }), "invalid_input");
+    await rejectsWith(setOwnBudgetBand(store, { tripId }), "invalid_input");
+    expect(store.upsertBudget).not.toHaveBeenCalled();
   });
 });
 

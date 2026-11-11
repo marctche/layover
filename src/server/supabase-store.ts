@@ -1,6 +1,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { createServerDb } from "@/db/server";
+import { isBudgetBand } from "@/domain/budget/bands";
 import { ServiceError } from "./errors";
 import type {
   AuthGateway,
@@ -101,12 +102,13 @@ const toPreference = (r: Row): PreferenceRow => ({
 
 const toBudget = (r: Row): BudgetRow => ({
   tripId: r.trip_id as string,
-  ceilingMinor: r.ceiling_minor as number,
+  band: isBudgetBand(r.band) ? r.band : null,
+  ceilingMinor: (r.ceiling_minor as number | null) ?? null,
   currency: r.currency as string,
   flexibilityMinor: (r.flexibility_minor as number | null) ?? null,
 });
 
-const BUDGET_COLUMNS = "trip_id, ceiling_minor, currency, flexibility_minor";
+const BUDGET_COLUMNS = "trip_id, band, ceiling_minor, currency, flexibility_minor";
 
 const toTripConstraints = (r: Row): TripConstraintsRow => ({
   departureAirport: (r.departure_airport as string | null) ?? null,
@@ -226,6 +228,9 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
         tripName: row.trip_name as string,
         inviterName: row.inviter_name as string,
         memberCount: row.member_count as number,
+        startDate: (row.start_date as string | null) ?? null,
+        endDate: (row.end_date as string | null) ?? null,
+        departureAirport: (row.departure_airport as string | null) ?? null,
       };
     },
 
@@ -379,6 +384,13 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
       return toDestination(row);
     },
 
+    async deleteDestination(tripId, destinationId) {
+      const { data, error } = await db.from("destinations").delete().eq("trip_id", tripId).eq("id", destinationId).select("id");
+      if (error) fail(error);
+      // No row removed: unknown id, another trip, or not the coordinator.
+      return (data?.length ?? 0) > 0;
+    },
+
     async upsertPreference(input) {
       const row = must(
         await db
@@ -407,6 +419,7 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
             {
               trip_id: input.tripId,
               user_id: input.userId,
+              band: input.band,
               ceiling_minor: input.ceilingMinor,
               currency: input.currency,
               flexibility_minor: input.flexibilityMinor,

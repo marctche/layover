@@ -6,6 +6,8 @@ export { MAX_CANDIDATE_CITIES, MAX_TRIP_NIGHTS } from "./engine/validate";
 export { dateOfNight, isValidIsoDate, nightIndexOf, nightsBetween } from "./dates/dates";
 export { findAirport, formatAirport, searchAirports } from "./airports/search";
 export type { Airport } from "./airports/search";
+export { BUDGET_BANDS, bandCeilingMinor, bandLabel, bandOptions, isBudgetBand } from "./budget/bands";
+export type { BudgetBand } from "./budget/bands";
 export { computeReadiness, tripNights } from "./trip/readiness";
 export type { MemberProgress, Readiness, ReadinessInput, ReadinessItem } from "./trip/readiness";
 export type { CompareResult, MoneyDelta, RouteComparison } from "./engine/compare";

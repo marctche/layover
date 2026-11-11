@@ -5,6 +5,7 @@ import { setDestinationConstraint, setTripConstraints } from "./constraints";
 import { ServiceError } from "./errors";
 import {
   getTripInput,
+  removeCandidateCityInput,
   suggestDestinationInput,
   parseInput,
   updateDestinationConstraintInput,
@@ -110,4 +111,12 @@ export async function addCandidateCity(store: Services, raw: unknown): Promise<D
   if (problem) throw new ServiceError("conflict", problem);
   // Coordinates come from our own catalog by label, so a client cannot supply its own.
   return suggestDestination(store, input, coordinatesFor(cities as City[], input.name) ?? undefined);
+}
+
+/** Removes a candidate city. Coordinator only. Its rules, events and quotes go with it. */
+export async function removeCandidateCity(store: Services, raw: unknown): Promise<void> {
+  const { tripId, destinationId } = parseInput(removeCandidateCityInput, raw);
+  const userId = await requireUser(store);
+  await requireCoordinator(store, tripId, userId);
+  if (!(await store.deleteDestination(tripId, destinationId))) throw new ServiceError("not_found");
 }
