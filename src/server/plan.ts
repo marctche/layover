@@ -13,6 +13,8 @@ import {
 import { MAX_CANDIDATE_CITIES } from "@/domain/engine/validate";
 import cities from "@/data/cities.json";
 import { checkNewCity, coordinatesFor, type City } from "@/domain/cities/search";
+import airports from "@/data/airports.json";
+import { findAirport, type Airport } from "@/domain/airports/search";
 import { suggestDestination } from "./planning";
 import { getTrip, type TripView } from "./trips";
 import type {
@@ -26,6 +28,8 @@ import type {
 } from "./store";
 
 type Services = Store & PlanningStore;
+
+const AIRPORTS = airports as Airport[];
 
 export interface PlanView extends TripView {
   constraints: TripConstraintsRow | null;
@@ -73,6 +77,9 @@ export async function updateTripConstraints(store: Services, raw: unknown): Prom
   const { tripId, ...patch } = parseInput(updateTripConstraintsInput, raw);
   const userId = await requireUser(store);
   await requireCoordinator(store, tripId, userId);
+  if (patch.departureAirport && !findAirport(AIRPORTS, patch.departureAirport)) {
+    throw new ServiceError("invalid_input", "Choose an airport from the list.");
+  }
   const current = (await store.getTripConstraints(tripId)) ?? EMPTY_CONSTRAINTS;
   const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   return setTripConstraints(store, { tripId, ...current, ...defined });

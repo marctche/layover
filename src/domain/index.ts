@@ -4,6 +4,8 @@ export { redactForViewer, redactOptionsForViewer, redactSimulationForViewer } fr
 export { simulateChange } from "./engine/simulate";
 export { MAX_CANDIDATE_CITIES, MAX_TRIP_NIGHTS } from "./engine/validate";
 export { dateOfNight, isValidIsoDate, nightIndexOf, nightsBetween } from "./dates/dates";
+export { findAirport, formatAirport, searchAirports } from "./airports/search";
+export type { Airport } from "./airports/search";
 export { computeReadiness, tripNights } from "./trip/readiness";
 export type { MemberProgress, Readiness, ReadinessInput, ReadinessItem } from "./trip/readiness";
 export type { CompareResult, MoneyDelta, RouteComparison } from "./engine/compare";
