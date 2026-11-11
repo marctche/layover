@@ -176,8 +176,14 @@ export function buildEngineInput(snap: EngineSnapshot, now: Date): EngineInputRe
 
   // The engine plans exactly the accepted set. Destinations have no accepted/rejected status
   // yet, so every trip destination counts as accepted and is required. Real accept/reject
-  // arrives with city-addition votes; the per-destination mustInclude flag is subsumed.
-  input.mustInclude = cities.map((c) => c.id);
+  // arrives with city-addition votes. mustInclude keeps only the user's real must-visit flags,
+  // so an accepted city can still be dropped but a must-visit one cannot.
+  input.accepted = cities.map((c) => c.id);
+  const mustVisit = snap.destinationConstraints
+    .filter((d) => d.mustInclude)
+    .map((d) => d.destinationId)
+    .sort();
+  if (mustVisit.length > 0) input.mustInclude = mustVisit;
   const locked = snap.destinationConstraints
     .filter((d) => d.lockPosition !== null)
     .sort((a, b) => (a.lockPosition as number) - (b.lockPosition as number))

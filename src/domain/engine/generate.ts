@@ -16,8 +16,9 @@ function computeDropOptions(input: TripInput): DropOption[] {
     ...(input.startCity ? [input.startCity] : []),
     ...(input.endCity ? [input.endCity] : []),
   ]);
-  return (input.mustInclude ?? [])
-    .filter((id) => !locked.has(id))
+  const pinned = new Set(input.mustInclude ?? []);
+  return (input.accepted ?? [])
+    .filter((id) => !locked.has(id) && !pinned.has(id))
     .map((cityId): DropOption => {
       const { routes } = searchRoutes(withoutCity(input, cityId));
       return { cityId, feasibleCount: routes.length, cheapest: bestFor("cheapest", routes) };

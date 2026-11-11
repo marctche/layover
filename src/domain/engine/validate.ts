@@ -139,6 +139,10 @@ export function validateInput(input: TripInput): EngineError[] {
     if (!cityIds.has(id)) add({ code: "unknown_city", message: `mustInclude references unknown city "${id}"`, path: `mustInclude[${i}]` });
   });
 
+  (input.accepted ?? []).forEach((id, i) => {
+    if (!cityIds.has(id)) add({ code: "unknown_city", message: `accepted references unknown city "${id}"`, path: `accepted[${i}]` });
+  });
+
   const locked = input.lockedOrder ?? [];
   const lockSeen = new Set<string>();
   locked.forEach((id, i) => {

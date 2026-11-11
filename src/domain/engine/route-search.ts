@@ -104,6 +104,7 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
   const required = new Set<string>([
     ...input.fixedEvents.map((e) => e.cityId),
     ...(input.mustInclude ?? []),
+    ...(input.accepted ?? []),
     ...lockedOrder,
     ...(startCity !== undefined ? [startCity] : []),
     ...(endCity !== undefined ? [endCity] : []),

@@ -6,7 +6,7 @@ import { generateRouteOptions } from "./generate";
 import { redactOptionsForViewer } from "./redact";
 
 /** Three cities, 6 nights, 2 to 4 nights each: a 2-city route is feasible and saves one intercity leg. */
-const required = (): TripInput => ({ ...triangleWithHomeLegs(), mustInclude: ["A", "B", "C"] });
+const required = (): TripInput => ({ ...triangleWithHomeLegs(), accepted: ["A", "B", "C"] });
 
 /** 3 nights minimum in each city: all three cannot fit in 6 nights, any two can. */
 const overfull = (): TripInput => {
@@ -17,7 +17,7 @@ const overfull = (): TripInput => {
 
 describe("required set", () => {
   it("never drops a required city, even when a shorter route is cheaper", () => {
-    const optional = generateRouteOptions({ ...required(), mustInclude: [] });
+    const optional = generateRouteOptions({ ...required(), accepted: [] });
     if (!optional.ok) throw new Error("expected ok");
     const cheapestOptional = optional.alternatives.find((a) => a.route.stops.length === 2);
     expect(cheapestOptional).toBeDefined(); // the shorter route exists and is cheaper
@@ -63,6 +63,12 @@ describe("dropOptions on an infeasible required set", () => {
     expect(ids({ ...overfull(), startCity: "A" })).toEqual(["B", "C"]);
     expect(ids({ ...overfull(), endCity: "B" })).toEqual(["A", "C"]);
     expect(ids({ ...overfull(), lockedOrder: ["A", "C"] })).toEqual(["B"]);
+  });
+
+  it("excludes mustInclude cities but still offers merely accepted ones", () => {
+    const r = generateRouteOptions({ ...overfull(), mustInclude: ["B"] });
+    if (r.ok) throw new Error("expected failure");
+    expect((r.errors[0]!.dropOptions ?? []).map((d) => d.cityId)).toEqual(["A", "C"]);
   });
 
   it("reports null cheapest and zero count when dropping a city does not help", () => {
