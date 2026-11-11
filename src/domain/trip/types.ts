@@ -84,7 +84,14 @@ export interface TripInput {
   cityCosts: CityCosts[];
   fixedEvents: FixedEvent[];
   preferences: Preference[];
+  /** Cities the user flagged as must-visit. Cannot be dropped, even to explain an infeasible plan. */
   mustInclude?: string[];
+  /**
+   * The accepted set: cities the route must visit, but which the group may still choose to drop.
+   * Required in every route like mustInclude, but simulateChange "remove" and dropOptions allow
+   * removing them.
+   */
+  accepted?: string[];
   /** Required cities that must appear in exactly this relative order; others may sit between. */
   lockedOrder?: string[];
   /** Route must begin here (implies required). */

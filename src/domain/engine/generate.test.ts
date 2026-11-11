@@ -24,15 +24,16 @@ describe("input validation", () => {
     expect(codes(generateRouteOptions(input))).toContain("dates_reversed");
   });
 
-  it("rejects unknown city ids in events, mustInclude and preferences", () => {
+  it("rejects unknown city ids in events, mustInclude, accepted and preferences", () => {
     const input: TripInput = {
       ...miniTrip(),
       mustInclude: ["ZZ"],
+      accepted: ["YY"],
       fixedEvents: [{ id: "e", cityId: "QQ", startDate: "2027-06-02", endDate: "2027-06-02", label: "x" }],
       preferences: [{ travelerId: "T1", cityId: "NOPE", score: 1 }],
     };
     const r = generateRouteOptions(input);
-    expect(codes(r).filter((c) => c === "unknown_city")).toHaveLength(3);
+    expect(codes(r).filter((c) => c === "unknown_city")).toHaveLength(4);
   });
 
   it("rejects money in another currency", () => {

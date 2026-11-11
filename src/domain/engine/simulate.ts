@@ -39,6 +39,7 @@ export function withoutCity(input: TripInput, cityId: string): TripInput {
     cityCosts: input.cityCosts.filter((c) => keepEnd(c.cityId)),
     preferences: input.preferences.filter((p) => keepEnd(p.cityId)),
     mustInclude: (input.mustInclude ?? []).filter(keepEnd),
+    accepted: (input.accepted ?? []).filter(keepEnd),
   };
 }
 

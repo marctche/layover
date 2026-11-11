@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { asiaDemo } from "../../../tests/fixtures/asia-demo";
 import { chainTrip } from "../../../tests/helpers/builders";
+import type { TripInput } from "../trip/types";
 import { compareRoutes } from "./compare";
 import { generateRouteOptions } from "./generate";
-import { simulateChange } from "./simulate";
+import { simulateChange, withoutCity } from "./simulate";
 
 describe("simulateChange", () => {
   it("adding a city has a positive marginal cost, hand-checked", () => {
@@ -56,6 +57,36 @@ describe("simulateChange", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.errors[0]?.message).toContain("mustInclude");
+  });
+
+  it("removes a merely accepted city and compares against keeping it", () => {
+    const input = { ...chainTrip(), mustInclude: ["A"], accepted: ["A", "B", "C"] };
+    const r = simulateChange(input, { type: "remove", cityId: "C" });
+    if (!r.ok) throw new Error("expected ok");
+    const cheapest = r.outcomes.find((o) => o.objective === "cheapest")!;
+    expect(cheapest.baseline?.id).toBe(JSON.stringify(["A", "B", "C"]));
+    expect(cheapest.proposed?.stops.map((s) => s.cityId)).not.toContain("C");
+    expect(cheapest.comparison?.groupTotalDelta.amountMinor).toBe(-10_000);
+    expect(cheapest.comparison?.citiesRemoved).toEqual(["C"]);
+  });
+
+  it("withoutCity also drops the city from accepted", () => {
+    const out = withoutCity({ ...chainTrip(), accepted: ["A", "B", "C"] }, "C");
+    expect(out.accepted).toEqual(["A", "B"]);
+  });
+
+  it("still refuses to remove an event, lock, start or end city when accepted", () => {
+    const accepted = ["A", "B", "C"];
+    const base: TripInput = { ...chainTrip(), mustInclude: [], accepted };
+    const refused = (input: TripInput, cityId: string) => {
+      const r = simulateChange(input, { type: "remove", cityId });
+      return !r.ok && r.errors[0]?.code === "city_required";
+    };
+    expect(refused({ ...base, fixedEvents: [{ id: "e", cityId: "B", startDate: "2027-06-02", endDate: "2027-06-02", label: "x" }] }, "B")).toBe(true);
+    expect(refused({ ...base, lockedOrder: ["B"] }, "B")).toBe(true);
+    expect(refused({ ...base, startCity: "A" }, "A")).toBe(true);
+    expect(refused({ ...base, endCity: "C" }, "C")).toBe(true);
+    expect(refused({ ...base, mustInclude: ["B"] }, "B")).toBe(true);
   });
 
   it("rejects an unknown city", () => {
