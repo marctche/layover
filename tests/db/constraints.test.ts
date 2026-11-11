@@ -426,3 +426,24 @@ describe("budget currency and flexibility stay private", () => {
     expect(fns.rows).toEqual([]);
   });
 });
+
+describe("destination coordinates", () => {
+  const insert = (lat: unknown, lng: unknown) =>
+    attempt(c, "insert into public.destinations (trip_id, name, suggested_by, lat, lng) values ($1, 'Busan', $2, $3, $4)", [
+      s.tripId,
+      s.bob,
+      lat,
+      lng,
+    ]);
+
+  it("accepts valid coordinates or none, and rejects out-of-range or half-set pairs", async () => {
+    await asUser(c, s.bob);
+    expect((await insert(35.18, 129.08)).error).toBeUndefined();
+    await c.query("delete from public.destinations where name = 'Busan'");
+    expect((await insert(null, null)).error).toBeUndefined();
+    await c.query("delete from public.destinations where name = 'Busan'");
+    expect((await insert(91, 0)).error?.code).toBe("23514");
+    expect((await insert(0, 181)).error?.code).toBe("23514");
+    expect((await insert(10, null)).error?.code).toBe("23514");
+  });
+});

@@ -11,7 +11,8 @@ import {
   updateTripConstraintsInput,
 } from "./schemas";
 import { MAX_CANDIDATE_CITIES } from "@/domain/engine/validate";
-import { checkNewCity } from "@/domain/cities/search";
+import cities from "@/data/cities.json";
+import { checkNewCity, coordinatesFor, type City } from "@/domain/cities/search";
 import { suggestDestination } from "./planning";
 import { getTrip, type TripView } from "./trips";
 import type {
@@ -100,5 +101,6 @@ export async function addCandidateCity(store: Services, raw: unknown): Promise<D
   const existing = await store.listDestinations(input.tripId);
   const problem = checkNewCity(existing.map((d) => d.name), input.name, MAX_CANDIDATE_CITIES);
   if (problem) throw new ServiceError("conflict", problem);
-  return suggestDestination(store, input);
+  // Coordinates come from our own catalog by label, so a client cannot supply its own.
+  return suggestDestination(store, input, coordinatesFor(cities as City[], input.name) ?? undefined);
 }

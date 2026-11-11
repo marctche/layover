@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import cities from "@/data/cities.json";
-import { checkNewCity, formatCity, normalize, searchCities, type City } from "./search";
+import { checkNewCity, coordinatesFor, formatCity, normalize, searchCities, type City } from "./search";
 
 const data = cities as City[];
 
@@ -55,5 +55,13 @@ describe("checkNewCity", () => {
     const seven = Array.from({ length: 7 }, (_, i) => `City ${i}`);
     expect(checkNewCity(seven, "Paris, France", 8)).toBeNull();
     expect(checkNewCity([...seven, "X"], "Paris, France", 8)).toContain("at most 8");
+  });
+});
+
+describe("coordinatesFor", () => {
+  const catalog: City[] = [{ id: "1", name: "Paris", asciiName: "Paris", country: "France", lat: 48.85, lng: 2.35, population: 1 }];
+  it("matches the label exactly, ignoring case, and returns null otherwise", () => {
+    expect(coordinatesFor(catalog, "paris, france")).toEqual({ lat: 48.85, lng: 2.35 });
+    expect(coordinatesFor(catalog, "Paris")).toBeNull();
   });
 });

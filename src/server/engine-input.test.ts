@@ -81,6 +81,18 @@ describe("buildEngineInput mapping", () => {
     expect(input.cities.map((c) => c.name)).toEqual(["Tokyo", "Seoul"]);
   });
 
+  it("passes destination coordinates to the engine city, and omits them when absent", () => {
+    const snap = snapshot();
+    snap.destinations = [
+      { id: seoul, name: "Seoul", suggestedBy: alice, lat: 37.57, lng: 126.98 },
+      { id: tokyo, name: "Tokyo", suggestedBy: alice, lat: null, lng: null },
+    ];
+    const { input } = ok(snap);
+    const byId = new Map(input.cities.map((c) => [c.id, c]));
+    expect(byId.get(seoul)).toMatchObject({ lat: 37.57, lng: 126.98 });
+    expect(byId.get(tokyo)).not.toHaveProperty("lat");
+  });
+
   it("defaults a destination without constraints to min 1 night, no max, required", () => {
     const { input } = ok(snapshot());
     for (const c of input.cities) {

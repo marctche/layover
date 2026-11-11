@@ -89,6 +89,8 @@ const toDestination = (r: Row): DestinationRow => ({
   id: r.id as string,
   name: r.name as string,
   suggestedBy: r.suggested_by as string,
+  lat: (r.lat as number | null) ?? null,
+  lng: (r.lng as number | null) ?? null,
 });
 
 const toPreference = (r: Row): PreferenceRow => ({
@@ -283,7 +285,7 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
 
     async listDestinations(tripId) {
       const rows = mustList(
-        await db.from("destinations").select("id, name, suggested_by").eq("trip_id", tripId).order("created_at"),
+        await db.from("destinations").select("id, name, suggested_by, lat, lng").eq("trip_id", tripId).order("created_at"),
       );
       return rows.map(toDestination);
     },
@@ -365,8 +367,13 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
       const row = must(
         await db
           .from("destinations")
-          .insert({ trip_id: input.tripId, name: input.name, suggested_by: input.suggestedBy })
-          .select("id, name, suggested_by")
+          .insert({
+            trip_id: input.tripId,
+            name: input.name,
+            suggested_by: input.suggestedBy,
+            ...(input.lat !== undefined && input.lng !== undefined ? { lat: input.lat, lng: input.lng } : {}),
+          })
+          .select("id, name, suggested_by, lat, lng")
           .single(),
       );
       return toDestination(row);

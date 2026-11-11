@@ -14,6 +14,9 @@ export interface City {
   name: string;
   minNights: number;
   maxNights?: number;
+  /** Coordinates let the engine estimate an unpriced leg. Without them it is pruned as unpriced. */
+  lat?: number;
+  lng?: number;
 }
 
 /** Directed. `from` and `to` are city ids or traveler home-airport ids. */
@@ -79,6 +82,8 @@ export interface TripInput {
   cities: City[];
   travelers: Traveler[];
   legs: Leg[];
+  /** Directed city pairs searched and confirmed to have no service; pruned instead of estimated. */
+  unavailablePairs?: { from: string; to: string }[];
   /** Optional round-trip / open-jaw tickets, priced against the one-way pair per traveler. */
   longHaulFares?: LongHaulFare[];
   cityCosts: CityCosts[];

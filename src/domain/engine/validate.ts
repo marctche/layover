@@ -59,6 +59,18 @@ export function validateInput(input: TripInput): EngineError[] {
     if (c.maxNights !== undefined && (!Number.isInteger(c.maxNights) || c.maxNights < c.minNights)) {
       add({ code: "invalid_city", message: `City "${c.id}" maxNights must be an integer >= minNights`, path: `cities[${i}].maxNights` });
     }
+    const hasLat = c.lat !== undefined;
+    const hasLng = c.lng !== undefined;
+    if (hasLat !== hasLng) {
+      add({ code: "invalid_city", message: `City "${c.id}" needs both lat and lng or neither`, path: `cities[${i}]` });
+    } else if (hasLat && hasLng) {
+      if (!Number.isFinite(c.lat) || (c.lat as number) < -90 || (c.lat as number) > 90) {
+        add({ code: "invalid_city", message: `City "${c.id}" lat must be between -90 and 90`, path: `cities[${i}].lat` });
+      }
+      if (!Number.isFinite(c.lng) || (c.lng as number) < -180 || (c.lng as number) > 180) {
+        add({ code: "invalid_city", message: `City "${c.id}" lng must be between -180 and 180`, path: `cities[${i}].lng` });
+      }
+    }
   });
 
   if (input.travelers.length === 0) add({ code: "no_travelers", message: "At least one traveler is required", path: "travelers" });
@@ -88,6 +100,15 @@ export function validateInput(input: TripInput): EngineError[] {
     if (!Number.isFinite(l.durationMinutes) || l.durationMinutes <= 0) {
       add({ code: "invalid_leg", message: `Leg ${i} durationMinutes must be a positive number, got ${l.durationMinutes}`, path: `legs[${i}].durationMinutes` });
     }
+  });
+
+  (input.unavailablePairs ?? []).forEach((p, i) => {
+    for (const end of ["from", "to"] as const) {
+      if (!cityIds.has(p[end])) {
+        add({ code: "unknown_city", message: `unavailablePairs[${i}] ${end} "${p[end]}" is not a city id`, path: `unavailablePairs[${i}].${end}` });
+      }
+    }
+    if (p.from === p.to) add({ code: "invalid_option", message: `unavailablePairs[${i}] names the same city twice`, path: `unavailablePairs[${i}]` });
   });
 
   const homes = new Set(input.travelers.map((t) => t.home));

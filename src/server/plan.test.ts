@@ -118,7 +118,19 @@ describe("addCandidateCity", () => {
   it("lets any member add a city as themselves", async () => {
     const insertDestination = insert();
     await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "Paris, France" });
-    expect(insertDestination).toHaveBeenCalledWith({ tripId, name: "Paris, France", suggestedBy: bob });
+    expect(insertDestination).toHaveBeenCalledWith({
+      tripId,
+      name: "Paris, France",
+      suggestedBy: bob,
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    });
+  });
+
+  it("stores no coordinates for a name that is not in the catalog", async () => {
+    const insertDestination = insert();
+    await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "Nowhereville, Atlantis" });
+    expect(insertDestination).toHaveBeenCalledWith({ tripId, name: "Nowhereville, Atlantis", suggestedBy: bob });
   });
 
   it("refuses a duplicate and a ninth city with a readable conflict", async () => {
