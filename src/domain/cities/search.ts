@@ -53,3 +53,10 @@ export function checkNewCity(existingNames: readonly string[], name: string, max
   if (existingNames.length >= max) return `The list is full: routes can compare at most ${max} cities. Remove one first or plan fewer stops.`;
   return null;
 }
+
+/** Catalog coordinates for a "Name, Country" label, or null when no city matches exactly. */
+export function coordinatesFor(cities: readonly City[], label: string): { lat: number; lng: number } | null {
+  const wanted = normalize(label);
+  const hit = cities.find((c) => normalize(formatCity(c)) === wanted);
+  return hit ? { lat: hit.lat, lng: hit.lng } : null;
+}

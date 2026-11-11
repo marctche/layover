@@ -167,7 +167,7 @@ describe("candidate generation", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.errors[0]?.code).toBe("no_feasible_route");
-    expect(r.errors[0]?.rejections?.missing_leg).toBeGreaterThan(0);
+    expect(r.errors[0]?.rejections?.leg_unpriced).toBeGreaterThan(0);
   });
 
   it("reports a traveler without a home leg as missing_home_leg", () => {

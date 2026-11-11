@@ -3,11 +3,21 @@ import { requireMember, requireUser } from "./access";
 import { parseInput, setOwnBudgetInput, setPreferenceInput, suggestDestinationInput } from "./schemas";
 import type { BudgetRow, DestinationRow, PreferenceRow, Store } from "./store";
 
-export async function suggestDestination(store: Store, raw: unknown): Promise<DestinationRow> {
+/** `coords` come from the server-side city catalog, never from the request. */
+export async function suggestDestination(
+  store: Store,
+  raw: unknown,
+  coords?: { lat: number; lng: number },
+): Promise<DestinationRow> {
   const input = parseInput(suggestDestinationInput, raw);
   const userId = await requireUser(store);
   await requireMember(store, input.tripId, userId);
-  return store.insertDestination({ tripId: input.tripId, name: input.name, suggestedBy: userId });
+  return store.insertDestination({
+    tripId: input.tripId,
+    name: input.name,
+    suggestedBy: userId,
+    ...(coords ? coords : {}),
+  });
 }
 
 export async function setPreference(store: Store, raw: unknown): Promise<PreferenceRow> {

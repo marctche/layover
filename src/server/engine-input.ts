@@ -103,6 +103,10 @@ export function buildEngineInput(snap: EngineSnapshot, now: Date): EngineInputRe
       const stay = stayOf.get(d.id);
       const city: TripInput["cities"][number] = { id: d.id, name: d.name, minNights: stay?.minNights ?? 1 };
       if (stay?.maxNights != null) city.maxNights = stay.maxNights;
+      if (d.lat != null && d.lng != null) {
+        city.lat = d.lat;
+        city.lng = d.lng;
+      }
       return city;
     })
     .sort(byKey((c) => c.id));

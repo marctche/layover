@@ -44,7 +44,8 @@ export interface DropOption {
 }
 
 export type RejectionReason =
-  | "missing_leg"
+  | "leg_unavailable"
+  | "leg_unpriced"
   | "missing_home_leg"
   | "min_nights_exceeded"
   | "no_valid_allocation"
@@ -89,6 +90,8 @@ export interface RouteMetrics {
   satisfaction: number;
   citiesIncluded: string[];
   citiesExcluded: string[];
+  /** Intercity legs priced by distance heuristic rather than a quote. Empty when every leg is quoted. */
+  estimatedLegs: { from: string; to: string }[];
   priceSources: PriceSource[];
 }
 

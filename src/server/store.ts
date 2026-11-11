@@ -24,6 +24,9 @@ export interface DestinationRow {
   id: string;
   name: string;
   suggestedBy: string;
+  /** From the city search; null for destinations added without a catalog match. */
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface PreferenceRow {
@@ -107,7 +110,7 @@ export interface Store {
   /** Hashing and all checks happen in the database. Throws ServiceError. */
   joinWithInvite(token: string): Promise<string>;
 
-  insertDestination(input: { tripId: string; name: string; suggestedBy: string }): Promise<DestinationRow>;
+  insertDestination(input: { tripId: string; name: string; suggestedBy: string; lat?: number; lng?: number }): Promise<DestinationRow>;
   upsertPreference(input: {
     tripId: string;
     destinationId: string;

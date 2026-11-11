@@ -39,7 +39,7 @@ describe("budgets are hard", () => {
     const r = generateRouteOptions(withCeiling(asiaDemo, "bea", 440_000));
     if (!r.ok) throw new Error("expected ok");
     expect(Object.keys(r.rejections).sort()).toEqual(
-      ["min_nights_exceeded", "missing_home_leg", "missing_leg", "no_valid_allocation", "over_budget", "order_locked"].sort(),
+      ["min_nights_exceeded", "leg_unavailable", "leg_unpriced", "missing_home_leg", "no_valid_allocation", "over_budget", "order_locked"].sort(),
     );
     const text = JSON.stringify(r.rejections);
     for (const t of asiaDemo.travelers) expect(text).not.toContain(t.id);

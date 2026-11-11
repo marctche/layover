@@ -33,7 +33,7 @@ function fake(userId: string | null, over: Record<string, unknown> = {}) {
       { id: seoul, name: "Seoul, South Korea", suggestedBy: alice },
     ],
     listPreferences: async () => [],
-    getBudget: vi.fn(async (_t: string, u: string) => ({ tripId, ceilingMinor: u === bob ? 111 : 999, currency: "USD", flexibilityMinor: null })),
+    getBudget: vi.fn(async (_t: string, u: string) => ({ tripId, ceilingMinor: u === bob ? 111 : 987654321, currency: "USD", flexibilityMinor: null })),
     getTripConstraints: vi.fn(async () => saved),
     upsertTripConstraints: vi.fn(async (_t: string, r: unknown) => r),
     listDestinationConstraints: vi.fn(async () => [{ destinationId: tokyo, minNights: 3, maxNights: 6, mustInclude: false, lockPosition: 2 }]),
@@ -61,7 +61,11 @@ describe("getPlanView", () => {
     expect(view.myAvailability?.flexibilityDays).toBe(4);
     // The store was only ever asked for the caller's budget.
     expect(s.getBudget.mock.calls.every((c) => c[1] === bob)).toBe(true);
-    expect(JSON.stringify(view)).not.toContain("999");
+    const json = JSON.stringify(view);
+    // Unmistakable sentinel for alice's private ceiling, plus a check that the field it lives in
+    // is only ever present once (bob's own), so this cannot pass vacuously.
+    expect(json).not.toContain("987654321");
+    expect(json.match(/"ceilingMinor"/g)).toHaveLength(1);
     expect(JSON.stringify(view)).not.toContain(alice + '","flexibilityDays');
   });
 
@@ -118,7 +122,19 @@ describe("addCandidateCity", () => {
   it("lets any member add a city as themselves", async () => {
     const insertDestination = insert();
     await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "Paris, France" });
-    expect(insertDestination).toHaveBeenCalledWith({ tripId, name: "Paris, France", suggestedBy: bob });
+    expect(insertDestination).toHaveBeenCalledWith({
+      tripId,
+      name: "Paris, France",
+      suggestedBy: bob,
+      lat: expect.any(Number),
+      lng: expect.any(Number),
+    });
+  });
+
+  it("stores no coordinates for a name that is not in the catalog", async () => {
+    const insertDestination = insert();
+    await addCandidateCity(fake(bob, { insertDestination }), { tripId, name: "Nowhereville, Atlantis" });
+    expect(insertDestination).toHaveBeenCalledWith({ tripId, name: "Nowhereville, Atlantis", suggestedBy: bob });
   });
 
   it("refuses a duplicate and a ninth city with a readable conflict", async () => {

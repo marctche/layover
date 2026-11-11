@@ -1,6 +1,7 @@
 import { dateOfNight, nightIndexOf, nightsBetween } from "../dates/dates";
 import { sumMoney } from "../money/money";
 import type { Leg, Quote, TripInput } from "../trip/types";
+import { estimateLeg } from "./estimate";
 import { allocateNights, type AllocationEvent } from "./allocate";
 import {
   betterInternational,
@@ -18,7 +19,8 @@ import { must } from "./util";
 
 export function emptyRejections(): RejectionSummary {
   return {
-    missing_leg: 0,
+    leg_unavailable: 0,
+    leg_unpriced: 0,
     missing_home_leg: 0,
     min_nights_exceeded: 0,
     no_valid_allocation: 0,
@@ -74,6 +76,30 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
     legs.set(key, prev ? cheaperLeg(prev, l) : l);
   }
   const leg = (from: string, to: string) => legs.get(`${from}\u0000${to}`);
+
+  // Pairs searched and confirmed to have no service. A priced leg always wins over this.
+  const unavailable = new Set((input.unavailablePairs ?? []).map((p) => `${p.from}\u0000${p.to}`));
+  const located = (id: string) => {
+    const c = cityById.get(id);
+    return c && c.lat !== undefined && c.lng !== undefined ? { id, lat: c.lat, lng: c.lng } : undefined;
+  };
+  const estimates = new Map<string, Leg | null>();
+  type Resolved = { leg: Leg; estimated: boolean } | "unavailable" | "unpriced";
+  /** Intercity leg: priced, else unavailable, else estimated from coordinates, else unpriced. */
+  const resolveIntercity = (from: string, to: string): Resolved => {
+    const priced = leg(from, to);
+    if (priced) return { leg: priced, estimated: false };
+    const key = `${from}\u0000${to}`;
+    if (unavailable.has(key)) return "unavailable";
+    let est = estimates.get(key);
+    if (est === undefined) {
+      const a = located(from);
+      const b = located(to);
+      est = a && b ? estimateLeg(a, b, input.currency) : null;
+      estimates.set(key, est);
+    }
+    return est ? { leg: est, estimated: true } : "unpriced";
+  };
 
   // Fares reduced per (home, outboundTo, returnFrom) with the same order as the
   // final choice, so duplicates never depend on input order.
@@ -222,7 +248,13 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
       return stop;
     });
 
-    const intercityLegs = seq.slice(1).map((id, i) => must(leg(must(seq[i], "city"), id), "intercity leg"));
+    const resolved = seq.slice(1).map((id, i) => {
+      const r = resolveIntercity(must(seq[i], "city"), id);
+      if (typeof r === "string") throw new Error("intercity leg unresolved after pruning");
+      return { r, from: must(seq[i], "city"), to: id };
+    });
+    const intercityLegs = resolved.map((x) => x.r.leg);
+    const estimatedLegs = resolved.filter((x) => x.r.estimated).map((x) => ({ from: x.from, to: x.to }));
 
     const travelerCosts = computeTravelerCosts({
       currency: input.currency,
@@ -261,6 +293,7 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
         satisfaction: computeSatisfaction(input.preferences, travelerIds, stops),
         citiesIncluded: [...seq],
         citiesExcluded: cities.filter((c) => !included.has(c.id)).map((c) => c.id),
+        estimatedLegs,
         priceSources: sortSources(travelerCosts.flatMap((c) => c.priceSources)),
       },
     });
@@ -288,9 +321,16 @@ export function searchRoutes(input: TripInput): { routes: RoutePlan[]; rejection
         reject("order_locked");
         continue;
       }
-      if (prev !== undefined && !leg(prev, c.id)) {
-        reject("missing_leg");
-        continue;
+      if (prev !== undefined) {
+        const r = resolveIntercity(prev, c.id);
+        if (r === "unavailable") {
+          reject("leg_unavailable");
+          continue;
+        }
+        if (r === "unpriced") {
+          reject("leg_unpriced");
+          continue;
+        }
       }
       if (prev === undefined && !canFlyOutTo(c.id)) {
         reject("missing_home_leg");

@@ -18,6 +18,7 @@ function plan(id: string, dollars: number, minutes: number, satisfaction: number
       satisfaction,
       citiesIncluded: cityIds,
       citiesExcluded: [],
+      estimatedLegs: [],
       priceSources: ["synthetic"],
     },
   };
