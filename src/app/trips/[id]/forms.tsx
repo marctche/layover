@@ -6,7 +6,6 @@ import {
   createInviteAction,
   removeMemberAction,
   revokeInviteAction,
-  setBudgetAction,
   setPreferenceAction,
   suggestDestinationAction,
 } from "./actions";
@@ -94,42 +93,6 @@ export function ScoreControl({
         </div>
       </fieldset>
       <ErrorText state={state} />
-    </form>
-  );
-}
-
-export function BudgetForm({
-  tripId,
-  currency,
-  defaultValue,
-}: {
-  tripId: string;
-  currency: string;
-  defaultValue: string;
-}) {
-  const [state, action, pending] = useActionState<FormState, FormData>(setBudgetAction, initialFormState);
-  return (
-    <form action={action} className="mt-3">
-      <input type="hidden" name="tripId" value={tripId} />
-      <input type="hidden" name="currency" value={currency} />
-      <label htmlFor="ceiling" className="block text-sm font-medium">
-        Your maximum budget ({currency})
-      </label>
-      <div className="mt-1 flex gap-2">
-        <input
-          id="ceiling"
-          name="ceiling"
-          inputMode="decimal"
-          required
-          defaultValue={defaultValue}
-          className={inputClass}
-        />
-        <button type="submit" disabled={pending} className={primaryButton}>
-          Save
-        </button>
-      </div>
-      <ErrorText state={state} />
-      {state.ok ? <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Saved.</p> : null}
     </form>
   );
 }

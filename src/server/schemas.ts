@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { BUDGET_BANDS } from "@/domain/budget/bands";
 import { ServiceError } from "./errors";
 
 // Inputs never carry a user id or a role. Identity comes from the session,
@@ -50,16 +51,15 @@ export const setPreferenceInput = z
   })
   .strict();
 
-export const setOwnBudgetInput = z
+/** The caller's private budget band. The currency and the derived ceiling are set server-side. */
+export const setOwnBudgetBandInput = z
   .object({
     tripId: z.uuid(),
-    ceilingMinor: minorUnits,
-    /** Defaults to the trip currency. Stored as entered, never converted. */
-    currency: currency.optional(),
-    /** How far above the ceiling the traveler would stretch. Private, like the ceiling. */
-    flexibilityMinor: minorUnits.nullable().optional(),
+    band: z.enum(BUDGET_BANDS),
   })
   .strict();
+
+export const removeCandidateCityInput = z.object({ tripId: z.uuid(), destinationId: z.uuid() }).strict();
 
 export const removeMemberInput = z.object({ tripId: z.uuid(), userId: z.uuid() }).strict();
 

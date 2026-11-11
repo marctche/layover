@@ -1,6 +1,8 @@
 // Coordinator-only services for confirmed planning constraints and manual quotes, plus the
 // member-owned availability write. The database enforces the same rules through row-level
 // security; checking the role here gives a clear error instead of a policy failure.
+import { nightsBetween } from "@/domain/dates/dates";
+import { MAX_TRIP_NIGHTS } from "@/domain/engine/validate";
 import { requireCoordinator, requireMember, requireUser } from "./access";
 import { ServiceError } from "./errors";
 import {
@@ -25,6 +27,11 @@ import type {
 
 type Services = Store & PlanningStore;
 
+/** Same rule as the engine: the last night of a trip is the one before its end date. */
+function eventFitsTrip(e: { startDate: string; endDate: string }, tripStart: string, tripEnd: string): boolean {
+  return e.startDate >= tripStart && e.endDate < tripEnd;
+}
+
 async function coordinator(store: Services, tripId: string): Promise<string> {
   const userId = await requireUser(store);
   await requireCoordinator(store, tripId, userId);
@@ -35,7 +42,23 @@ async function coordinator(store: Services, tripId: string): Promise<string> {
 export async function setTripDates(store: Services, raw: unknown): Promise<void> {
   const input = parseInput(setTripDatesInput, raw);
   await coordinator(store, input.tripId);
-  await store.setTripDates(input.tripId, input.startDate, input.endDate);
+  const { startDate, endDate } = input;
+  if (startDate !== null && endDate !== null) {
+    const nights = nightsBetween(startDate, endDate);
+    if (nights < 1 || nights > MAX_TRIP_NIGHTS) {
+      throw new ServiceError("invalid_input", `A trip must be 1 to ${MAX_TRIP_NIGHTS} nights; these dates give ${nights}.`);
+    }
+  }
+  // An event is a night slept, so it must start on or after the first day and end before the last.
+  for (const e of await store.listFixedEvents(input.tripId)) {
+    if (startDate === null || endDate === null || !eventFitsTrip(e, startDate, endDate)) {
+      throw new ServiceError(
+        "invalid_input",
+        `The event "${e.label}" (${e.startDate} to ${e.endDate}) would fall outside these dates. Move or remove it first.`,
+      );
+    }
+  }
+  await store.setTripDates(input.tripId, startDate, endDate);
 }
 
 /** Replaces the trip's constraint row. Everything in it is optional. */
@@ -54,6 +77,17 @@ export async function setDestinationConstraint(store: Services, raw: unknown): P
 export async function addFixedEvent(store: Services, raw: unknown): Promise<FixedEventRow> {
   const { tripId, ...event } = parseInput(addFixedEventInput, raw);
   await coordinator(store, tripId);
+  const trip = await store.getTrip(tripId);
+  if (!trip) throw new ServiceError("not_found");
+  if (!trip.startDate || !trip.endDate) {
+    throw new ServiceError("invalid_input", "Set the trip dates before adding an event.");
+  }
+  if (!eventFitsTrip(event, trip.startDate, trip.endDate)) {
+    throw new ServiceError(
+      "invalid_input",
+      `An event must fall on nights of the trip: from ${trip.startDate} up to the night before ${trip.endDate}.`,
+    );
+  }
   return store.insertFixedEvent(tripId, event);
 }
 

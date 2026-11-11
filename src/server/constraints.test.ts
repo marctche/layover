@@ -112,6 +112,59 @@ describe("input validation", () => {
     expect(await code(setMyAvailability(s, { tripId, ranges: [], userId: bob }))).toBe("invalid_input");
   });
 
+  describe("trip dates and fixed events", () => {
+    const withDates = (start: string | null, end: string | null, events: { startDate: string; endDate: string }[] = []) =>
+      fake(alice, {
+        getTrip: async () => ({ id: tripId, name: "Asia", startDate: start, endDate: end, status: "planning", groupTargetMinor: null, baseCurrency: "USD" }),
+        listFixedEvents: async () => events.map((e) => ({ id: randomUUID(), destinationId: tokyo, label: "Concert", ...e })),
+      });
+    const event = (startDate: string, endDate = startDate) => ({ tripId, destinationId: tokyo, label: "Concert", startDate, endDate });
+
+    it("accepts an event on any night of the trip, including the first and the last", async () => {
+      const s = withDates("2027-03-01", "2027-03-08");
+      expect(await code(addFixedEvent(s, event("2027-03-01")))).toBeNull();
+      expect(await code(addFixedEvent(s, event("2027-03-07")))).toBeNull();
+      expect(await code(addFixedEvent(s, event("2027-03-02", "2027-03-07")))).toBeNull();
+    });
+
+    it("rejects an event on the end date, before the start, or after the end", async () => {
+      const s = withDates("2027-03-01", "2027-03-08");
+      expect(await code(addFixedEvent(s, event("2027-03-08")))).toBe("invalid_input");
+      expect(await code(addFixedEvent(s, event("2027-02-28")))).toBe("invalid_input");
+      expect(await code(addFixedEvent(s, event("2027-03-07", "2027-03-08")))).toBe("invalid_input");
+      expect(s.insertFixedEvent).not.toHaveBeenCalled();
+    });
+
+    it("requires trip dates before adding an event", async () => {
+      const s = withDates(null, null);
+      expect(await code(addFixedEvent(s, event("2027-03-02")))).toBe("invalid_input");
+      expect(s.insertFixedEvent).not.toHaveBeenCalled();
+    });
+
+    it("rejects a date change that strands an event, naming it", async () => {
+      const s = withDates("2027-03-01", "2027-03-08", [{ startDate: "2027-03-06", endDate: "2027-03-07" }]);
+      const err = await setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-03-07" }).catch((e: ServiceError) => e);
+      expect((err as ServiceError).code).toBe("invalid_input");
+      expect((err as ServiceError).message).toContain("Concert");
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-07", endDate: "2027-03-14" }))).toBe("invalid_input");
+      expect(await code(setTripDates(s, { tripId, startDate: null, endDate: null }))).toBe("invalid_input");
+      expect(s.setTripDates).not.toHaveBeenCalled();
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-03-09" }))).toBeNull();
+    });
+
+    it("requires 1 to 60 nights", async () => {
+      const s = withDates("2027-03-01", "2027-03-08");
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-03-01" }))).toBe("invalid_input");
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-05-01" }))).toBe("invalid_input");
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-03-02" }))).toBeNull();
+      expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: "2027-04-30" }))).toBeNull();
+    });
+
+    it("lets dates be cleared when there are no events", async () => {
+      expect(await code(setTripDates(withDates("2027-03-01", "2027-03-08"), { tripId, startDate: null, endDate: null }))).toBeNull();
+    });
+  });
+
   it("rejects inconsistent windows, nights, dates and quotes", async () => {
     const s = fake(alice);
     expect(await code(setTripDates(s, { tripId, startDate: "2027-03-01", endDate: null }))).toBe("invalid_input");
