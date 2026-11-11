@@ -29,7 +29,7 @@ export type SimulateResult =
     }
   | { ok: false; errors: EngineError[] };
 
-function withoutCity(input: TripInput, cityId: string): TripInput {
+export function withoutCity(input: TripInput, cityId: string): TripInput {
   const keepEnd = (id: string) => id !== cityId;
   return {
     ...input,

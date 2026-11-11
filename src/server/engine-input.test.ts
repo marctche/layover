@@ -81,13 +81,13 @@ describe("buildEngineInput mapping", () => {
     expect(input.cities.map((c) => c.name)).toEqual(["Tokyo", "Seoul"]);
   });
 
-  it("defaults a destination without constraints to min 1 night, no max, optional", () => {
+  it("defaults a destination without constraints to min 1 night, no max, required", () => {
     const { input } = ok(snapshot());
     for (const c of input.cities) {
       expect(c.minNights).toBe(1);
       expect(c.maxNights).toBeUndefined();
     }
-    expect(input.mustInclude).toBeUndefined();
+    expect(input.mustInclude).toEqual([tokyo, seoul].sort());
     expect(input.lockedOrder).toBeUndefined();
     expect(input.startCity).toBeUndefined();
     expect(input.endCity).toBeUndefined();
@@ -113,7 +113,7 @@ describe("buildEngineInput mapping", () => {
     );
     expect(input.cities.find((c) => c.id === tokyo)).toMatchObject({ minNights: 3, maxNights: 5 });
     expect(input.cities.find((c) => c.id === seoul)).toMatchObject({ minNights: 2 });
-    expect(input.mustInclude).toEqual([tokyo]);
+    expect(input.mustInclude).toEqual([tokyo, seoul].sort()); // every destination is required
     expect(input.lockedOrder).toEqual([seoul, tokyo]);
     expect([input.startCity, input.endCity]).toEqual([seoul, tokyo]);
   });

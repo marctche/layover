@@ -31,6 +31,16 @@ export interface EngineError {
   path?: string;
   /** Present only on no_feasible_route. */
   rejections?: RejectionSummary;
+  /** Present only on no_feasible_route: what dropping each droppable required city would give. */
+  dropOptions?: DropOption[];
+}
+
+export interface DropOption {
+  cityId: string;
+  /** Feasible routes once this city is removed from the set. */
+  feasibleCount: number;
+  /** Cheapest feasible route without the city; null if still infeasible. */
+  cheapest: RoutePlan | null;
 }
 
 export type RejectionReason =
