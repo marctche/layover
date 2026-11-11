@@ -428,9 +428,12 @@ describe("budget currency and flexibility stay private", () => {
 });
 
 describe("destination coordinates", () => {
-  const insert = (lat: unknown, lng: unknown) =>
-    attempt(c, "insert into public.destinations (trip_id, name, suggested_by, lat, lng) values ($1, 'Busan', $2, $3, $4)", [
+  // Distinct names per insert; no deletes (authenticated has select and insert only). The
+  // surrounding transaction is rolled back by afterEach.
+  const insert = (name: string, lat: unknown, lng: unknown) =>
+    attempt(c, "insert into public.destinations (trip_id, name, suggested_by, lat, lng) values ($1, $2, $3, $4, $5)", [
       s.tripId,
+      name,
       s.bob,
       lat,
       lng,
@@ -438,12 +441,10 @@ describe("destination coordinates", () => {
 
   it("accepts valid coordinates or none, and rejects out-of-range or half-set pairs", async () => {
     await asUser(c, s.bob);
-    expect((await insert(35.18, 129.08)).error).toBeUndefined();
-    await c.query("delete from public.destinations where name = 'Busan'");
-    expect((await insert(null, null)).error).toBeUndefined();
-    await c.query("delete from public.destinations where name = 'Busan'");
-    expect((await insert(91, 0)).error?.code).toBe("23514");
-    expect((await insert(0, 181)).error?.code).toBe("23514");
-    expect((await insert(10, null)).error?.code).toBe("23514");
+    expect((await insert("Busan", 35.18, 129.08)).error).toBeUndefined();
+    expect((await insert("Daegu", null, null)).error).toBeUndefined();
+    expect((await insert("Lat91", 91, 0)).error?.code).toBe("23514");
+    expect((await insert("Lng181", 0, 181)).error?.code).toBe("23514");
+    expect((await insert("Half", 10, null)).error?.code).toBe("23514");
   });
 });
