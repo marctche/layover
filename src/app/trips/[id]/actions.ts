@@ -4,13 +4,11 @@ import { revalidatePath } from "next/cache";
 import { field, messageFor } from "@/app/_lib/form";
 import type { FormState } from "@/app/_lib/form-state";
 import { requestOrigin } from "@/app/_lib/request";
-import { parseMajorToMinor } from "@/domain/money/money";
 import {
   createInvite,
   createRequestServices,
   removeMember,
   revokeInvite,
-  setOwnBudget,
   setPreference,
   suggestDestination,
 } from "@/server";
@@ -46,21 +44,6 @@ export async function setPreferenceAction(_prev: FormState, formData: FormData):
     });
   } catch (error) {
     return { error: messageFor(error, "Choose one of the five options.") };
-  }
-  refresh(tripId);
-  return { ok: true };
-}
-
-export async function setBudgetAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const tripId = field(formData, "tripId");
-  const currency = field(formData, "currency") ?? "";
-  const minor = parseMajorToMinor(field(formData, "ceiling") ?? "", currency);
-  if (minor === null) return { error: "Enter your budget as a plain amount, for example 1800 or 1800.50." };
-  try {
-    const { store } = await createRequestServices();
-    await setOwnBudget(store, { tripId, ceilingMinor: minor });
-  } catch (error) {
-    return { error: messageFor(error, "That budget is not valid.") };
   }
   refresh(tripId);
   return { ok: true };

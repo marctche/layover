@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { ServiceError } from "./errors";
-import { addCandidateCity, getPlanView, updateDestinationConstraint, updateTripConstraints } from "./plan";
+import { addCandidateCity, getPlanView, removeCandidateCity, updateDestinationConstraint, updateTripConstraints } from "./plan";
 import type { PlanningStore, Role, Store, TripConstraintsRow } from "./store";
 
 const alice = randomUUID(); // coordinator
@@ -33,7 +33,7 @@ function fake(userId: string | null, over: Record<string, unknown> = {}) {
       { id: seoul, name: "Seoul, South Korea", suggestedBy: alice },
     ],
     listPreferences: async () => [],
-    getBudget: vi.fn(async (_t: string, u: string) => ({ tripId, ceilingMinor: u === bob ? 111 : 987654321, currency: "USD", flexibilityMinor: null })),
+    getBudget: vi.fn(async (_t: string, u: string) => ({ tripId, band: u === bob ? ("2k_3k" as const) : ("4k_plus" as const), ceilingMinor: u === bob ? 111 : 987654321, currency: "USD", flexibilityMinor: null })),
     getTripConstraints: vi.fn(async () => saved),
     upsertTripConstraints: vi.fn(async (_t: string, r: unknown) => r),
     listDestinationConstraints: vi.fn(async () => [{ destinationId: tokyo, minNights: 3, maxNights: 6, mustInclude: false, lockPosition: 2 }]),
@@ -58,6 +58,7 @@ describe("getPlanView", () => {
     const s = fake(bob);
     const view = await getPlanView(s, { tripId });
     expect(view.myBudget?.ceilingMinor).toBe(111);
+    expect(view.myBudget?.band).toBe("2k_3k");
     expect(view.myAvailability?.flexibilityDays).toBe(4);
     // The store was only ever asked for the caller's budget.
     expect(s.getBudget.mock.calls.every((c) => c[1] === bob)).toBe(true);
@@ -66,6 +67,9 @@ describe("getPlanView", () => {
     // is only ever present once (bob's own), so this cannot pass vacuously.
     expect(json).not.toContain("987654321");
     expect(json.match(/"ceilingMinor"/g)).toHaveLength(1);
+    // The other traveler's band is absent too: only one band field, and it is bob's.
+    expect(json.match(/"band"/g)).toHaveLength(1);
+    expect(json).not.toContain("4k_plus");
     expect(JSON.stringify(view)).not.toContain(alice + '","flexibilityDays');
   });
 
@@ -113,6 +117,28 @@ describe("updateDestinationConstraint", () => {
     expect(s.upsertDestinationConstraint).toHaveBeenCalledWith(tripId, { destinationId: seoul, minNights: 2, maxNights: null, mustInclude: false, lockPosition: null });
     expect(await code(updateDestinationConstraint(fake(alice), { tripId, destinationId: randomUUID(), mustInclude: true }))).toBe("not_found");
     expect(await code(updateDestinationConstraint(fake(bob), { tripId, destinationId: tokyo, mustInclude: true }))).toBe("forbidden");
+  });
+});
+
+describe("removeCandidateCity", () => {
+  it("lets the coordinator remove a city", async () => {
+    const deleteDestination = vi.fn(async () => true);
+    await removeCandidateCity(fake(alice, { deleteDestination }), { tripId, destinationId: tokyo });
+    expect(deleteDestination).toHaveBeenCalledWith(tripId, tokyo);
+  });
+
+  it("is forbidden for a member and not_found for an outsider, without deleting", async () => {
+    const deleteDestination = vi.fn(async () => true);
+    expect(await code(removeCandidateCity(fake(bob, { deleteDestination }), { tripId, destinationId: tokyo }))).toBe("forbidden");
+    expect(await code(removeCandidateCity(fake(eve, { deleteDestination }), { tripId, destinationId: tokyo }))).toBe("not_found");
+    expect(await code(removeCandidateCity(fake(null, { deleteDestination }), { tripId, destinationId: tokyo }))).toBe("unauthenticated");
+    expect(deleteDestination).not.toHaveBeenCalled();
+  });
+
+  it("is not_found for an unknown id and invalid_input for a malformed one", async () => {
+    const none = vi.fn(async () => false);
+    expect(await code(removeCandidateCity(fake(alice, { deleteDestination: none }), { tripId, destinationId: randomUUID() }))).toBe("not_found");
+    expect(await code(removeCandidateCity(fake(alice), { tripId, destinationId: "x" }))).toBe("invalid_input");
   });
 });
 

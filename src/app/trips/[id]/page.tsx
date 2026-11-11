@@ -2,11 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireReadyUser } from "@/app/_lib/request";
-import { minorToMajorString } from "@/domain/money/money";
+import { bandLabel } from "@/domain/budget/bands";
 import { getTrip, listInvites, ServiceError, type TripView } from "@/server";
 import {
   AddCityForm,
-  BudgetForm,
   CreateInviteForm,
   RemoveMemberButton,
   RevokeInviteButton,
@@ -106,11 +105,9 @@ async function Trip({ params }: { params: PageProps<"/trips/[id]">["params"] }) 
           Your budget
         </h2>
         <p className={`mt-1 ${muted}`}>Only you can see this.</p>
-        <BudgetForm
-          tripId={trip.id}
-          currency={trip.baseCurrency}
-          defaultValue={myBudget ? minorToMajorString(myBudget.ceilingMinor, trip.baseCurrency) : ""}
-        />
+        <p className="mt-3 text-sm">
+          {myBudget?.band ? bandLabel(myBudget.band, trip.baseCurrency) : "Not chosen yet."}
+        </p>
       </section>
 
       <section aria-labelledby="group-heading" className="mt-8">

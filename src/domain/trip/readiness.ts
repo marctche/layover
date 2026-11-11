@@ -17,12 +17,12 @@ export interface ReadinessInput {
   /** How many cities each member has rated, keyed by user id. Scores are not included. */
   ratedCountByMember: { userId: string; name: string; rated: number }[];
   viewerId: string;
-  hasMyAvailability: boolean;
+  /** The viewer has chosen a budget band. The band itself is never part of this input. */
   hasMyBudget: boolean;
 }
 
 export interface ReadinessItem {
-  id: "dates" | "airport" | "cities" | "myRatings" | "myAvailability" | "myBudget";
+  id: "dates" | "airport" | "cities" | "myRatings" | "myBudget";
   label: string;
   done: boolean;
   /** A required item blocks "Compare routes"; the others are your own part. */
@@ -30,7 +30,7 @@ export interface ReadinessItem {
   /** Why it is not done, or a short status. */
   detail: string;
   /** The plan step that fixes it. */
-  step: "when" | "from" | "where" | "rate" | "free" | "budget";
+  step: "dates" | "airport" | "cities" | "must-visit" | "event" | "invite" | "rate" | "budget";
 }
 
 export interface MemberProgress {
@@ -58,7 +58,7 @@ export function computeReadiness(input: ReadinessInput): Readiness {
       done: nights !== null && nights > 0,
       required: true,
       detail: nights !== null && nights > 0 ? `${nights} nights` : "Pick exact start and end dates. A flexible window is not supported yet.",
-      step: "when",
+      step: "dates",
     },
     {
       id: "airport",
@@ -66,7 +66,7 @@ export function computeReadiness(input: ReadinessInput): Readiness {
       done: input.departureAirport !== null,
       required: true,
       detail: input.departureAirport ?? "Set the airport the group leaves from.",
-      step: "from",
+      step: "airport",
     },
     {
       id: "cities",
@@ -77,7 +77,7 @@ export function computeReadiness(input: ReadinessInput): Readiness {
         input.cityCount > MAX_CANDIDATE_CITIES
           ? `${input.cityCount} cities; the limit is ${MAX_CANDIDATE_CITIES}.`
           : `${input.cityCount} of ${MAX_CANDIDATE_CITIES} added`,
-      step: "where",
+      step: "cities",
     },
     {
       id: "myRatings",
@@ -88,19 +88,11 @@ export function computeReadiness(input: ReadinessInput): Readiness {
       step: "rate",
     },
     {
-      id: "myAvailability",
-      label: "When you are free",
-      done: input.hasMyAvailability,
-      required: false,
-      detail: input.hasMyAvailability ? "Saved" : "Not set",
-      step: "free",
-    },
-    {
       id: "myBudget",
-      label: "Your budget",
+      label: "Your budget band",
       done: input.hasMyBudget,
       required: false,
-      detail: input.hasMyBudget ? "Set" : "Not set",
+      detail: input.hasMyBudget ? "Chosen" : "Not chosen",
       step: "budget",
     },
   ];

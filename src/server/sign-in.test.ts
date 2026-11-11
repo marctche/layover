@@ -250,7 +250,7 @@ describe("pending invite cookie", () => {
 
 describe("invite preview", () => {
   it("returns what the store returns for a well-formed token", async () => {
-    const preview = { tripName: "Asia", inviterName: "Alex", memberCount: 3 };
+    const preview = { tripName: "Asia", inviterName: "Alex", memberCount: 3, startDate: null, endDate: null, departureAirport: null };
     const get = vi.fn(async () => preview);
     expect(await previewInvite(store({ getInvitePreview: get }), { token })).toEqual(preview);
     expect(get).toHaveBeenCalledWith(token);
@@ -303,7 +303,7 @@ describe("proxy rules", () => {
 
 describe("invite confirmation (read-only)", () => {
   const userId = randomUUID();
-  const preview = { tripName: "Asia", inviterName: "Alex", memberCount: 3 };
+  const preview = { tripName: "Asia", inviterName: "Alex", memberCount: 3, startDate: null, endDate: null, departureAirport: null };
   const base = () => ({
     currentUserId: async () => userId,
     joinWithInvite: vi.fn(async () => tripId),

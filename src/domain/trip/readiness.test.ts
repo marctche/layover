@@ -11,7 +11,6 @@ const base: ReadinessInput = {
     { userId: "b", name: "Sam", rated: 1 },
   ],
   viewerId: "a",
-  hasMyAvailability: true,
   hasMyBudget: true,
 };
 
@@ -47,9 +46,24 @@ describe("computeReadiness", () => {
   });
 
   it("does not block on your own unfinished part", () => {
-    const r = computeReadiness({ ...base, hasMyBudget: false, hasMyAvailability: false, viewerId: "b" });
+    const r = computeReadiness({ ...base, hasMyBudget: false, viewerId: "b" });
     expect(r.blockers).toEqual([]);
-    expect(r.items.filter((i) => !i.done).map((i) => i.id)).toEqual(["myRatings", "myAvailability", "myBudget"]);
+    expect(r.items.filter((i) => !i.done).map((i) => i.id)).toEqual(["myRatings", "myBudget"]);
+  });
+
+  it("points each item at its setup step", () => {
+    const r = computeReadiness({ ...base, viewerId: "b" });
+    expect(Object.fromEntries(r.items.map((i) => [i.id, i.step]))).toEqual({
+      dates: "dates",
+      airport: "airport",
+      cities: "cities",
+      myRatings: "rate",
+      myBudget: "budget",
+    });
+  });
+
+  it("has no availability item", () => {
+    expect(computeReadiness(base).items.map((i) => i.id)).not.toContain("myAvailability");
   });
 
   it("treats zero-night dates and more than 8 cities as not ready", () => {
