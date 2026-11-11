@@ -86,6 +86,21 @@ describe("updateTripConstraints", () => {
     expect(s.upsertTripConstraints).toHaveBeenCalledWith(tripId, { ...saved, departureAirport: "LHR" });
   });
 
+  it("rejects an airport code that is not in the catalog and stores nothing", async () => {
+    const s = fake(alice);
+    const err = await updateTripConstraints(s, { tripId, departureAirport: "ZZZ" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ServiceError);
+    expect((err as ServiceError).code).toBe("invalid_input");
+    expect((err as ServiceError).message).toBe("Choose an airport from the list.");
+    expect(s.upsertTripConstraints).not.toHaveBeenCalled();
+  });
+
+  it("clears the airport with null", async () => {
+    const s = fake(alice);
+    await updateTripConstraints(s, { tripId, departureAirport: null });
+    expect(s.upsertTripConstraints).toHaveBeenCalledWith(tripId, { ...saved, departureAirport: null });
+  });
+
   it("can clear a field by naming it null, and starts from an empty row on first save", async () => {
     const s = fake(alice);
     await updateTripConstraints(s, { tripId, endDestinationId: null });
