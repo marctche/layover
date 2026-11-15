@@ -226,7 +226,10 @@ describe("budgets are private to their owner", () => {
       select n.nspname || '.' || p.proname as fn
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname in ('public', 'app') and p.prosrc ilike '%member_budgets%'`);
-    expect(fns.rows).toEqual([]);
+    // The one allowed reader returns the band only. It must never mention the amount.
+    expect(fns.rows).toEqual([{ fn: "public.trip_member_bands" }]);
+    const body = await c.query("select p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'trip_member_bands'");
+    expect(body.rows[0].prosrc).not.toMatch(/ceiling_minor|flexibility_minor|currency/i);
 
     const policies = await c.query(
       "select policyname, coalesce(qual, '') || ' ' || coalesce(with_check, '') as expr from pg_policies where tablename = 'member_budgets'",
