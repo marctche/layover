@@ -51,3 +51,5 @@ Sign-in offers Google and an emailed 6-digit code (the same email also carries a
 ## Attribution
 
 City search uses data from [GeoNames](https://www.geonames.org/), licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Regenerate `src/data/cities.json` with `pnpm build-cities`.
+
+Airport search uses data from [OurAirports](https://ourairports.com/data/), released into the public domain. Regenerate `src/data/airports.json` with `pnpm build-airports`.
