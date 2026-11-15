@@ -124,7 +124,8 @@ describe("supabase-store against the real database", () => {
       expect(await c.getTrip(tripId)).toBeNull();
       expect(await c.getRole(tripId, alice.userId)).toBeNull();
       expect(await c.listMembers(tripId)).toEqual([]);
-      expect(await anon.getTrip(tripId)).toBeNull();
+      // Signed out has no table privileges at all, so the database refuses rather than returning nothing.
+      await expect(anon.getTrip(tripId)).rejects.toMatchObject({ code: "forbidden" });
     });
 
     it("listMembers shows every member with display names, in join order", async () => {
