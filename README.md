@@ -17,15 +17,35 @@ cp .env.example .env.local
 
 ## Commands
 
-| Command          | What it does                                  |
-| ---------------- | --------------------------------------------- |
-| `pnpm dev`       | Start the Next.js dev server                  |
-| `pnpm build`     | Production build                              |
-| `pnpm typecheck` | Generate Next.js types and run `tsc --noEmit` |
-| `pnpm lint`      | Run ESLint                                    |
-| `pnpm test`      | Run the Vitest suite once                     |
+| Command                | What it does                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
+| `pnpm dev`             | Start the Next.js dev server                                                                  |
+| `pnpm build`           | Production build                                                                              |
+| `pnpm typecheck`       | Generate Next.js types and run `tsc --noEmit`                                                 |
+| `pnpm lint`            | Run ESLint                                                                                    |
+| `pnpm test`            | Run the Vitest suite once                                                                     |
+| `pnpm test:db`         | Run the SQL-level database and access-control tests (needs `LAYOVER_TEST_DB_URL`)             |
+| `pnpm test:auth`       | Run real email-code sign-in tests against a local Supabase stack                              |
+| `pnpm price-trip`      | Dry-run the flight searches for a sample trip (`--trip europe\|asia`); `--live --max-searches N` runs them |
+| `pnpm build-cities`    | Regenerate `src/data/cities.json` from the GeoNames cities15000 dump                          |
+| `pnpm build-airports`  | Regenerate `src/data/airports.json` from the OurAirports airport list                         |
 
 `pnpm test:watch` runs Vitest in watch mode.
+
+## Environment variables
+
+Copy `.env.example` to `.env.local` for the application and the pricing script. The test variables are read from the shell or CI environment.
+
+| Variable                               | Required                          | Used for                                                                           |
+| -------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Yes, to run the app               | Supabase project URL. Browser-safe.                                                |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes, to run the app               | Supabase publishable (anon) key. Browser-safe.                                     |
+| `SUPABASE_SECRET_KEY`                  | No                                | Supabase secret key. Server-only, never exposed to the browser.                    |
+| `SERPAPI_API_KEY`                      | Only for `pnpm price-trip --live` | SerpApi key for live flight quotes. Server-only. Also read from `.env.local`.      |
+| `LAYOVER_TEST_DB_URL`                  | Only for `pnpm test:db`           | Postgres connection string for a database with the migrations applied.             |
+| `LAYOVER_TEST_SUPABASE_URL`            | Only for `pnpm test:auth`         | API URL of the local Supabase stack.                                               |
+| `LAYOVER_TEST_SUPABASE_KEY`            | Only for `pnpm test:auth`         | Publishable (or anon) key of the local stack.                                      |
+| `LAYOVER_TEST_MAILPIT_URL`             | No                                | Mailpit URL for reading sign-in codes. Defaults to `http://127.0.0.1:54324`.       |
 
 ## Database
 
