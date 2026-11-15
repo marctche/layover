@@ -49,3 +49,7 @@ supabase/.branches/
 
 # SerpApi response cache
 /.cache/
+
+# editor and tooling
+.claude/
+.idea/
