@@ -1,10 +1,14 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { saveNameAction, type WelcomeState } from "./actions";
 
 export function NameForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<WelcomeState, FormData>(saveNameAction, {});
+  const redirectTo = state.redirectTo;
+  useEffect(() => {
+    if (redirectTo) window.location.assign(redirectTo);
+  }, [redirectTo]);
   return (
     <form action={action} className="space-y-3">
       <input type="hidden" name="next" value={next} />

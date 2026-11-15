@@ -51,5 +51,5 @@ export async function verifyCodeAction(_prev: VerifyState, formData: FormData): 
         : "That code did not work. Check it, or send a new one.";
     return { error: message };
   }
-  redirect(`/auth/continue?next=${encodeURIComponent(text(formData.get("next")) ?? "")}`);
+  return { redirectTo: `/auth/continue?next=${encodeURIComponent(text(formData.get("next")) ?? "")}` };
 }
