@@ -1,6 +1,6 @@
-// Budget bands: the coarse private budget a traveler picks. The band is what is stored; the
-// ceiling is derived from it (the band's top, in the trip currency) and the open-ended top
-// band has no ceiling.
+// Budget bands: the coarse view of a traveler's private budget. The traveler types an exact
+// amount; the band is derived from it (see bandForAmount) and is all anyone else ever sees.
+// The database derives the same band with the same boundaries (app.budget_band).
 import { minorUnitDigits, type CurrencyCode } from "../money/money";
 
 export const BUDGET_BANDS = ["under_2k", "2k_3k", "3k_4k", "4k_plus"] as const;
@@ -22,6 +22,23 @@ export function isBudgetBand(value: unknown): value is BudgetBand {
 export function bandCeilingMinor(band: BudgetBand, currency: CurrencyCode): number | null {
   const top = BAND_TOP_MAJOR[band];
   return top === null ? null : top * 10 ** minorUnitDigits(currency);
+}
+
+/**
+ * The band an exact amount falls in. Boundaries are in whole currency units and each band
+ * includes its lower bound: under_2k is below 2000, 2k_3k is 2000 up to but excluding 3000,
+ * 3k_4k is 3000 up to but excluding 4000, 4k_plus is 4000 and above. `amountMinor` is in minor
+ * units of `currency` (cents for CAD, whole yen for JPY). Compared as integers, so no rounding.
+ */
+export function bandForAmount(amountMinor: number, currency: CurrencyCode): BudgetBand {
+  if (!Number.isSafeInteger(amountMinor) || amountMinor < 0) {
+    throw new RangeError(`amountMinor must be a non-negative safe integer, got ${amountMinor}`);
+  }
+  const unit = 10 ** minorUnitDigits(currency);
+  if (amountMinor < 2000 * unit) return "under_2k";
+  if (amountMinor < 3000 * unit) return "2k_3k";
+  if (amountMinor < 4000 * unit) return "3k_4k";
+  return "4k_plus";
 }
 
 function amount(major: number, currency: CurrencyCode): string {

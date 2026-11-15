@@ -39,14 +39,19 @@ export interface PreferenceRow {
 
 export interface BudgetRow {
   tripId: string;
-  /** The chosen budget band. Null only for rows written before bands existed. */
+  /** The band the amount falls in, derived by the database. Always set when an amount is. */
   band: BudgetBand | null;
-  /** The band's top in `currency`. Null for the open-ended band (no ceiling). */
+  /** The exact budget the owner typed, in minor units of `currency`. Owner-only. Null only for a legacy row that has a band and no amount. */
   ceilingMinor: number | null;
   /** May differ from the trip currency. Stored as entered, never converted. */
   currency: string;
   /** How far above the ceiling the owner would stretch, in `currency`. */
   flexibilityMinor: number | null;
+}
+
+export interface MemberBand {
+  userId: string;
+  band: BudgetBand;
 }
 
 export interface InviteRow {
@@ -133,10 +138,12 @@ export interface Store {
     tripId: string;
     userId: string;
     band: BudgetBand;
-    ceilingMinor: number | null;
+    ceilingMinor: number;
     currency: string;
     flexibilityMinor: number | null;
   }): Promise<BudgetRow>;
+  /** Band per member for members of the trip who set a budget (security definer function). Never amounts. */
+  getMemberBands(tripId: string): Promise<MemberBand[]>;
 }
 
 export interface AuthGateway {

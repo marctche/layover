@@ -433,6 +433,11 @@ export function createSupabaseStore(db: SupabaseClient): Store & PlanningStore {
       return toBudget(row);
     },
 
+    async getMemberBands(tripId) {
+      const rows = mustList(await db.rpc("trip_member_bands", { p_trip_id: tripId }));
+      return rows.flatMap((r) => (isBudgetBand(r.band) ? [{ userId: r.user_id as string, band: r.band }] : []));
+    },
+
     async setTripDates(tripId, startDate, endDate) {
       const { data, error } = await db
         .from("trips")

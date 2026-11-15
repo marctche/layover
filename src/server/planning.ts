@@ -1,8 +1,8 @@
-import { bandCeilingMinor } from "@/domain/budget/bands";
+import { bandForAmount } from "@/domain/budget/bands";
 import { ServiceError } from "./errors";
 import { requireMember, requireUser } from "./access";
-import { parseInput, setOwnBudgetBandInput, setPreferenceInput, suggestDestinationInput } from "./schemas";
-import type { BudgetRow, DestinationRow, PreferenceRow, Store } from "./store";
+import { getMemberBandsInput, parseInput, setOwnBudgetAmountInput, setPreferenceInput, suggestDestinationInput } from "./schemas";
+import type { BudgetRow, MemberBand, DestinationRow, PreferenceRow, Store } from "./store";
 
 /** `coords` come from the server-side city catalog, never from the request. */
 export async function suggestDestination(
@@ -29,12 +29,12 @@ export async function setPreference(store: Store, raw: unknown): Promise<Prefere
 }
 
 /**
- * Writes the caller's own budget band. There is no way to name another traveler, and the
- * currency and the ceiling are derived here (the trip's currency, the band's top), so a band
- * and a ceiling can never disagree.
+ * Writes the caller's own exact budget. There is no way to name another traveler. The currency
+ * is the trip's and the band is derived here from the amount (the database derives it again,
+ * so the two can never disagree).
  */
-export async function setOwnBudgetBand(store: Store, raw: unknown): Promise<BudgetRow> {
-  const input = parseInput(setOwnBudgetBandInput, raw);
+export async function setOwnBudgetAmount(store: Store, raw: unknown): Promise<BudgetRow> {
+  const input = parseInput(setOwnBudgetAmountInput, raw);
   const userId = await requireUser(store);
   await requireMember(store, input.tripId, userId);
   const [trip, existing] = await Promise.all([store.getTrip(input.tripId), store.getBudget(input.tripId, userId)]);
@@ -42,9 +42,20 @@ export async function setOwnBudgetBand(store: Store, raw: unknown): Promise<Budg
   return store.upsertBudget({
     tripId: input.tripId,
     userId,
-    band: input.band,
-    ceilingMinor: bandCeilingMinor(input.band, trip.baseCurrency),
+    band: bandForAmount(input.amountMinor, trip.baseCurrency),
+    ceilingMinor: input.amountMinor,
     currency: trip.baseCurrency,
     flexibilityMinor: existing?.flexibilityMinor ?? null,
   });
+}
+
+/**
+ * The band each member who has set a budget falls in, for any member of the trip. This is the
+ * only budget information the group sees: the amount stays with its owner.
+ */
+export async function getMemberBands(store: Store, raw: unknown): Promise<MemberBand[]> {
+  const input = parseInput(getMemberBandsInput, raw);
+  const userId = await requireUser(store);
+  await requireMember(store, input.tripId, userId);
+  return store.getMemberBands(input.tripId);
 }

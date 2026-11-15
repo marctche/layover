@@ -54,7 +54,7 @@ tests/
 | `destination_constraints` | Per destination, coordinator-written: minimum and maximum nights, must-visit, lock position. A destination without a row means at least one night, no maximum, optional |
 | `trip_fixed_events` | A labelled date range the group must spend in one destination |
 | `member_availability`, `member_availability_ranges` | Per member: date ranges they can travel and how many days they can shift. Visible to every member, writable by its owner |
-| `member_budgets` | Member, ceiling in minor units, currency (may differ from the trip's, never converted), optional flexibility above the ceiling. **Readable by its owner only.** Never joined into group-visible queries |
+| `member_budgets` | Member, exact budget in minor units (`ceiling_minor`), derived band, currency (may differ from the trip's, never converted), optional flexibility above the ceiling. **Readable by its owner only.** Never joined into group-visible queries |
 | `quotes` | Leg or long-haul fare, mode, amount in minor units, currency, adults, source (`live`, `manual`, `estimate`, `synthetic`), provider, fetched_at, expires_at. Members read; the coordinator adds manual quotes only; live, estimate and synthetic rows are written by server code with the secret key |
 | `route_scenarios` | Saved engine runs: exact input, result, input hash and engine version, unique per trip. Immutable. The input never contains budgets |
 | `decision_cards`, `card_responses` | Trigger type, supporting facts (schema-validated JSON), generated question and options, status |
@@ -94,7 +94,8 @@ Exact search over a capped set is exact and easy to explain. Heuristics like bea
 
 ## Budget privacy
 
-- `member_budgets` is readable only by its owner, enforced by row-level security.
+- `member_budgets` is readable only by its owner, enforced by row-level security. It holds the exact amount the traveler typed (`ceiling_minor`); `band` is derived from it by a database trigger, so the two cannot disagree.
+- The rest of the trip sees only the band (under 2,000, 2,000 to 3,000, 3,000 to 4,000, 4,000 or more in the trip currency), through the `trip_member_bands(trip_id)` function. It is security definer, returns member and band only, never the amount, and returns nothing to anyone who is not a member of that trip.
 - Budget checks run on the server. Each traveler gets their own exact headroom. The group gets at most a count of travelers over budget per route, and only when the group has 3 or more members.
 - Every route result is redacted for the person viewing it before it leaves the server, because headroom plus cost would reveal another traveler's ceiling.
 - AI tools never receive other members' raw budgets.
