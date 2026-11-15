@@ -107,6 +107,14 @@ describe("real email-code login", () => {
     const ownTrip = await alice.db.from("trips").select("id").eq("id", tripId);
     expect(ownTrip.data).toHaveLength(1);
 
+    // The owner's band is derived from the amount, and a non-member gets no bands.
+    const ownBands = await alice.db.rpc("trip_member_bands", { p_trip_id: tripId });
+    expect(ownBands.error).toBeNull();
+    expect(ownBands.data).toEqual([{ user_id: alice.userId, band: "2k_3k" }]);
+    const outsiderBands = await bob.db.rpc("trip_member_bands", { p_trip_id: tripId });
+    expect(outsiderBands.error).toBeNull();
+    expect(outsiderBands.data).toEqual([]);
+
     // A second real user sees none of it.
     for (const table of ["member_budgets", "trips", "trip_members", "destinations"]) {
       const res = await bob.db.from(table).select("*").limit(50);

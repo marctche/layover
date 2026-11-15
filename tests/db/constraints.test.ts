@@ -423,7 +423,8 @@ describe("budget currency and flexibility stay private", () => {
     const fns = await c.query(
       "select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public','app') and p.prosrc ilike '%member_budgets%'",
     );
-    expect(fns.rows).toEqual([]);
+    // Only the band-only function may read the table; its body is checked in rls.test.ts.
+    expect(fns.rows).toEqual([{ proname: "trip_member_bands" }]);
   });
 });
 

@@ -14,7 +14,7 @@ export {
 export { addCandidateCity, removeCandidateCity, getPlanView, updateDestinationConstraint, updateTripConstraints, type PlanView } from "./plan";
 export { listScenarios, loadEngineSnapshot, runScenario } from "./scenarios";
 export { buildEngineInput, hashEngineInput, ENGINE_VERSION } from "./engine-input";
-export { suggestDestination, setPreference, setOwnBudgetBand } from "./planning";
+export { suggestDestination, setPreference, setOwnBudgetAmount, getMemberBands } from "./planning";
 export {
   completeSignIn,
   gateRedirect,

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { completeSignIn, safeNextPath, signInWithMagicLink } from "./auth";
 import { ServiceError } from "./errors";
 import { createInvite, hashInviteToken, listInvites, joinWithInvite, revokeInvite } from "./invites";
-import { setOwnBudgetBand, setPreference, suggestDestination } from "./planning";
+import { getMemberBands, setOwnBudgetAmount, setPreference, suggestDestination } from "./planning";
 import type { AuthGateway, InviteRow, Role, Store } from "./store";
 import { createTrip, getTrip, removeMember } from "./trips";
 
@@ -51,6 +51,7 @@ function fakeStore(userId: string | null, overrides: Partial<Store> = {}): Store
     insertDestination: vi.fn(async (i) => ({ id: randomUUID(), name: i.name, suggestedBy: i.suggestedBy })),
     upsertPreference: vi.fn(async (i) => ({ destinationId: i.destinationId, userId: i.userId, score: i.score })),
     deleteDestination: vi.fn(async () => true),
+    getMemberBands: vi.fn(async () => []),
     upsertBudget: vi.fn(async (i) => ({ tripId: i.tripId, band: i.band, ceilingMinor: i.ceilingMinor, currency: i.currency, flexibilityMinor: i.flexibilityMinor })),
     ...overrides,
   };
@@ -86,7 +87,7 @@ describe("input validation", () => {
   it("rejects a client-supplied role or user id", async () => {
     const store = fakeStore(bob);
     await rejectsWith(createTrip(store, { name: "x", baseCurrency: "USD", role: "coordinator" }), "invalid_input");
-    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", userId: alice }), "invalid_input");
+    await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor: 250000, userId: alice }), "invalid_input");
     await rejectsWith(suggestDestination(store, { tripId, name: "Kyoto", suggestedBy: alice }), "invalid_input");
   });
 
@@ -271,7 +272,7 @@ describe("planning writes", () => {
     const store = fakeStore(carol);
     await rejectsWith(suggestDestination(store, { tripId, name: "Seoul" }), "not_found");
     await rejectsWith(setPreference(store, { tripId, destinationId: randomUUID(), score: 1 }), "not_found");
-    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k" }), "not_found");
+    await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor: 250000 }), "not_found");
     expect(store.insertDestination).not.toHaveBeenCalled();
     expect(store.upsertBudget).not.toHaveBeenCalled();
   });
@@ -280,37 +281,58 @@ describe("planning writes", () => {
     const store = fakeStore(bob);
     await suggestDestination(store, { tripId, name: " Seoul " });
     expect(store.insertDestination).toHaveBeenCalledWith({ tripId, name: "Seoul", suggestedBy: bob });
-    await setOwnBudgetBand(store, { tripId, band: "2k_3k" });
+    await setOwnBudgetAmount(store, { tripId, amountMinor: 250000 });
     expect(store.upsertBudget).toHaveBeenCalledWith({
       tripId,
       userId: bob,
       band: "2k_3k",
-      ceilingMinor: 300000,
+      ceilingMinor: 250000,
       currency: "USD",
       flexibilityMinor: null,
     });
   });
 
-  it("writes no ceiling for the open-ended band", async () => {
+  it("derives the band from the amount, including at the boundaries", async () => {
     const store = fakeStore(bob);
-    await setOwnBudgetBand(store, { tripId, band: "4k_plus" });
-    expect(store.upsertBudget).toHaveBeenCalledWith(expect.objectContaining({ band: "4k_plus", ceilingMinor: null }));
+    for (const [amountMinor, band] of [
+      [199_999, "under_2k"],
+      [200_000, "2k_3k"],
+      [399_999, "3k_4k"],
+      [400_000, "4k_plus"],
+    ] as const) {
+      await setOwnBudgetAmount(store, { tripId, amountMinor });
+      expect(store.upsertBudget).toHaveBeenLastCalledWith(expect.objectContaining({ band, ceilingMinor: amountMinor }));
+    }
   });
 
-  it("lets the coordinator set their own band like any member", async () => {
+  it("lets the coordinator set their own budget like any member", async () => {
     const store = fakeStore(alice);
-    await setOwnBudgetBand(store, { tripId, band: "under_2k" });
+    await setOwnBudgetAmount(store, { tripId, amountMinor: 100000 });
     expect(store.upsertBudget).toHaveBeenCalledWith(expect.objectContaining({ userId: alice, band: "under_2k" }));
   });
 
-  it("rejects bands that do not exist and any client-supplied amount or currency", async () => {
+  it("rejects non-positive and fractional amounts, and any client-supplied band, currency or user", async () => {
     const store = fakeStore(bob);
-    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "5k_plus" }), "invalid_input");
-    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", ceilingMinor: 987654321 }), "invalid_input");
-    await rejectsWith(setOwnBudgetBand(store, { tripId, band: "2k_3k", currency: "JPY" }), "invalid_input");
-    await rejectsWith(setOwnBudgetBand(store, { tripId }), "invalid_input");
+    for (const amountMinor of [0, -5, 12.5, Number.NaN, "250000"]) {
+      await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor }), "invalid_input");
+    }
+    await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor: 1, band: "4k_plus" }), "invalid_input");
+    await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor: 1, currency: "JPY" }), "invalid_input");
+    await rejectsWith(setOwnBudgetAmount(store, { tripId, amountMinor: 1, userId: alice }), "invalid_input");
+    await rejectsWith(setOwnBudgetAmount(store, { tripId }), "invalid_input");
     expect(store.upsertBudget).not.toHaveBeenCalled();
   });
+});
+
+describe("member bands", () => {
+  it("returns the bands to a member and refuses a non-member", async () => {
+    const bands = [{ userId: bob, band: "3k_4k" as const }];
+    const store = fakeStore(bob, { getMemberBands: vi.fn(async () => bands) });
+    expect(await getMemberBands(store, { tripId })).toEqual(bands);
+    await rejectsWith(getMemberBands(fakeStore(carol), { tripId }), "not_found");
+    await rejectsWith(getMemberBands(fakeStore(null), { tripId }), "unauthenticated");
+  });
+
 });
 
 describe("magic-link plumbing", () => {

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireReadyUser } from "@/app/_lib/request";
 import { bandLabel } from "@/domain/budget/bands";
+import { formatMoney } from "@/domain/money/money";
 import { getTrip, listInvites, ServiceError, type TripView } from "@/server";
 import {
   AddCityForm,
@@ -106,8 +107,13 @@ async function Trip({ params }: { params: PageProps<"/trips/[id]">["params"] }) 
         </h2>
         <p className={`mt-1 ${muted}`}>Only you can see this.</p>
         <p className="mt-3 text-sm">
-          {myBudget?.band ? bandLabel(myBudget.band, trip.baseCurrency) : "Not chosen yet."}
+          {myBudget?.ceilingMinor != null
+            ? formatMoney({ amountMinor: myBudget.ceilingMinor, currency: trip.baseCurrency })
+            : "Not set yet."}
         </p>
+        {myBudget?.band ? (
+          <p className={`mt-1 ${muted}`}>Everyone else sees only: {bandLabel(myBudget.band, trip.baseCurrency)}</p>
+        ) : null}
       </section>
 
       <section aria-labelledby="group-heading" className="mt-8">

@@ -49,7 +49,7 @@ Questions Layover answers for this group:
 ### Differentiators
 - **AI decision cards:** questions grounded in the calculated marginal cost and time of a choice.
 - **Scenario simulation:** "what if we drop Seoul?"
-- **Private budget signals:** each traveler sees their own budget fit; the group sees only an anonymous count.
+- **Private budget signals:** each traveler sees their own budget fit; the group sees only the band the traveler's budget falls in, never the amount.
 - **Natural-language constraints:** "I can't leave before the 12th" becomes a validated, structured constraint.
 
 ## Product rules
