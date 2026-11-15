@@ -1,71 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
+import { newClient, readCode, signInWithEmailCode } from "./helpers";
 
 // Signs in with real emailed codes against a local Supabase stack, then checks that row-level
-// security holds for real sessions (not just for simulated roles). Needs the stack running:
-//   LAYOVER_TEST_SUPABASE_URL  API URL
-//   LAYOVER_TEST_SUPABASE_KEY  publishable (or anon) key
-//   LAYOVER_TEST_MAILPIT_URL   optional, defaults to http://127.0.0.1:54324
-
-function required(name: string): string {
-  const value = process.env[name];
-  // Fail loudly. A missing stack must never read as a pass.
-  if (!value) throw new Error(`${name} is not set. These tests need a running local Supabase stack.`);
-  return value;
-}
-
-const supabaseUrl = required("LAYOVER_TEST_SUPABASE_URL");
-const supabaseKey = required("LAYOVER_TEST_SUPABASE_KEY");
-const mailpitUrl = process.env.LAYOVER_TEST_MAILPIT_URL ?? "http://127.0.0.1:54324";
-
-const newClient = (): SupabaseClient =>
-  createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-interface MailpitSearch {
-  messages?: { ID: string }[];
-}
-interface MailpitMessage {
-  Text?: string;
-  HTML?: string;
-}
-
-/** Waits for the email sent to this address and returns the 6-digit code in it. */
-async function readCode(email: string): Promise<string> {
-  const deadline = Date.now() + 30_000;
-  while (Date.now() < deadline) {
-    const search = await fetch(`${mailpitUrl}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`);
-    const found = (await search.json()) as MailpitSearch;
-    const id = found.messages?.[0]?.ID;
-    if (id) {
-      const message = (await (await fetch(`${mailpitUrl}/api/v1/message/${id}`)).json()) as MailpitMessage;
-      const code = /<strong>(\d{6})<\/strong>/.exec(message.HTML ?? "")?.[1] ?? /\b(\d{6})\b/.exec(message.Text ?? "")?.[1];
-      if (code) return code;
-    }
-    await sleep(500);
-  }
-  throw new Error(`No sign-in email arrived for ${email}`);
-}
-
-/** A client holding a real session obtained with an emailed code. */
-async function signInWithEmailCode(label: string): Promise<{ db: SupabaseClient; userId: string; email: string }> {
-  const email = `${label}-${randomUUID().slice(0, 8)}@example.test`;
-  const db = newClient();
-  const sent = await db.auth.signInWithOtp({ email });
-  expect(sent.error).toBeNull();
-
-  const token = await readCode(email);
-  const verified = await db.auth.verifyOtp({ email, token, type: "email" });
-  expect(verified.error).toBeNull();
-  expect(verified.data.session).not.toBeNull();
-  const userId = verified.data.user?.id;
-  if (!userId) throw new Error("No user after verifyOtp");
-  return { db, userId, email };
-}
+// security holds for real sessions (not just for simulated roles). See helpers.ts for the
+// environment the stack needs.
 
 describe("real email-code login", () => {
   it("rejects a wrong code", async () => {

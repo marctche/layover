@@ -19,6 +19,12 @@ export function EmailSignIn({ next }: { next: string }) {
   );
   const [verifyState, verifyAction, verifying] = useActionState<VerifyState, FormData>(verifyCodeAction, {});
 
+  // A full navigation, so the browser sends the session cookie the action just set.
+  const redirectTo = verifyState.redirectTo;
+  useEffect(() => {
+    if (redirectTo) window.location.assign(redirectTo);
+  }, [redirectTo]);
+
   const sentAt = state.step === "code" ? state.sentAt : null;
   const [secondsLeft, setSecondsLeft] = useState(0);
   useEffect(() => {

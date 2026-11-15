@@ -53,3 +53,7 @@ supabase/.branches/
 # editor and tooling
 .claude/
 .idea/
+
+# playwright
+/test-results/
+/playwright-report/

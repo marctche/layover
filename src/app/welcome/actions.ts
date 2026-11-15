@@ -5,6 +5,8 @@ import { createRequestServices, ServiceError, setDisplayName } from "@/server";
 
 export interface WelcomeState {
   error?: string;
+  /** Where to go after saving. Navigated to by the client; see VerifyState for why not redirect(). */
+  redirectTo?: string;
 }
 
 export async function saveNameAction(_prev: WelcomeState, formData: FormData): Promise<WelcomeState> {
@@ -19,5 +21,5 @@ export async function saveNameAction(_prev: WelcomeState, formData: FormData): P
     if (error.code === "invalid_input") return { error: "Enter a name between 1 and 80 characters." };
     return { error: "We could not save your name. Try again." };
   }
-  redirect(`/auth/continue?next=${encodeURIComponent(typeof next === "string" ? next : "")}`);
+  return { redirectTo: `/auth/continue?next=${encodeURIComponent(typeof next === "string" ? next : "")}` };
 }
