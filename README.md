@@ -1,6 +1,6 @@
 # Layover
 
-Layover is a collaborative group trip planner. Group members compare routes, understand costs, and decide together.
+Layover is a collaborative group trip planner. Group members propose destinations, set constraints, and compare feasible routes with per-traveler costs while keeping budgets private.
 
 ## Prerequisites
 
@@ -64,7 +64,7 @@ Sign-in offers Google and an emailed 6-digit code (the same email also carries a
 
 ## Docs
 
-- [docs/PRODUCT.md](docs/PRODUCT.md): problem, core loop, product rules
+- [docs/PRODUCT.md](docs/PRODUCT.md): problem, features, product rules
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): stack, module layout, data model, engine design
 - [docs/DECISIONS.md](docs/DECISIONS.md): key engineering decisions and trade-offs
 

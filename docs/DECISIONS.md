@@ -6,45 +6,33 @@ The key technical decisions behind Layover, with the alternatives that were reje
 
 Trips rarely have more than 8 candidate cities. With a cap of 8, an exact search over subsets and orderings, with pruning, is fast enough and can be fully explained: if a valid route exists, the engine finds it.
 
-**Rejected:** beam search and local search. They scale further but lose that guarantee. Inputs above the cap are rejected with a clear message instead of getting slower. Trip length is capped the same way, at 60 nights, because night allocation grows with the square of trip length: 8 cities over 90 nights took 6.4 seconds.
+**Rejected:** beam search and local search. They scale further but lose that guarantee. Inputs above the cap are rejected with a clear message instead of getting slower. Trip length is capped the same way, at 60 nights, because night allocation grows with the square of trip length.
 
-## Order-invariant memoization: worst case from 31 s to 1.5 s
+## Order-invariant memoization
 
-A benchmark at the 8-city cap (8 fully connected cities, 21 nights) took **31 seconds**.
-
-**Cause:** the night-allocation step (a dynamic program over position and nights used) ran once for every city ordering, about 110,000 times.
+At the 8-city cap (8 fully connected cities, 21 nights) the night-allocation step, a dynamic program over position and nights used, would run once for every city ordering, about 110,000 times.
 
 **Insight:** route order only affects the night split through the fixed-event cities. Shuffling the other cities between two events can't change which splits are valid. So the cache key is the route split at the event cities, with each segment as a sorted set.
 
-**Result:** the dynamic program runs **255 times instead of 109,600**, and the worst case takes about **1.5 s**. The benchmark asserts on the number of runs rather than wall-clock time, so it doesn't fail on slow CI machines.
+**Result:** the dynamic program runs a few hundred times instead of once per ordering. The benchmark asserts on the number of runs rather than wall-clock time, so it doesn't fail on slow CI machines.
 
 Two smaller changes support it:
 - **Pareto filter:** a sort-and-sweep replaces an O(n²) pairwise check.
 - **Costs:** all cost arithmetic is done in whole cents (integers).
 
-## Price only the finalists
+## Estimate unpriced legs instead of pruning them
 
-A 6-city trip produces hundreds of candidate routes, and each route needs date-specific flight prices. Pricing all of them would mean hundreds of API searches per trip.
+A city pair with no quote is not treated as impossible. The engine uses a deterministic, distance-based estimate labeled `estimate`, and every price carries its source (live, manual, estimate or synthetic), so an estimate is never shown as a live price.
 
-**Decision:** routes are ranked using estimated prices, and live prices are fetched only for the 2 or 3 finalists. Every price carries its source (live, manual, estimate or synthetic), so an estimate is never shown as a live price.
+## Verify provider responses
 
-## Provider-agnostic pricing
+The flight provider is SerpApi (Google Flights). It is scraping-based, so its output is checked rather than trusted: every response is verified against the request that produced it, and a failed response becomes a missing price, never a zero. Prices that look wrong next to their peers are flagged, and a suspiciously low price is held out of the engine until a person confirms it, because a false low price would otherwise win "cheapest". Manual and estimate sources are always available as fallbacks.
 
-Flight data APIs differ widely in access, cost and coverage:
+## Budgets stay private
 
-| Provider | Strengths | Trade-offs |
-|---|---|---|
-| SerpApi (Google Flights) | Instant access, real prices | Scraping-based, so terms and stability are a risk |
-| Duffel | Proper booking API with a clean contract | Live pricing requires business activation and billing |
-| RouteStack | Instant signup, free monthly allowance, MCP-first | Unclear token cost and regional coverage |
-
-**Decision:** pricing sits behind one interface, with manual and estimate sources always available as fallbacks. Changing providers doesn't touch the engine or the UI.
-
-## Budgets are hard limits and stay private
-
-- **Hard limits:** a route that puts any traveler over their budget is rejected, never quietly allowed through. The rejection report gives only counts by reason, with no names or amounts.
-- **Privacy:** budgets are visible only to their owner. Each traveler sees their own room left in the budget. The group sees only how many travelers are over budget, and only when the group has 3 or more members.
-- **Redaction:** every route is redacted for the person viewing it before it leaves the server. Remaining budget room plus the route's cost would reveal someone's exact budget, so it's stripped for everyone but the owner. Each engine result type (a route, a set of options, a simulated change) has its own redaction function, tested by scanning the whole serialized result, so no nested route can slip through.
+- **Exact amount is private:** a traveler's budget is readable only by its owner, enforced by row-level security. A database trigger derives a coarse band from the amount, and the rest of the trip sees only that band, through a security-definer function that returns member and band and never the amount.
+- **Engine check:** when a ceiling is supplied, a route that puts a traveler over it is rejected, never quietly allowed through. The rejection report gives only counts by reason, with no names or amounts.
+- **Redaction:** remaining budget room plus the route's cost would reveal someone's exact budget, so it is stripped for everyone but the owner. Each engine result type (a route, a set of options, a simulated change) has its own redaction function, tested by scanning the whole serialized result, so no nested route can slip through.
 
 ## Database tests in CI instead of locally
 
@@ -57,6 +45,5 @@ Supabase's local stack runs about 10 Docker containers, which is heavy for a mod
 ## One app with a pure engine
 
 - **One Next.js app, not microservices:** the scope doesn't justify a second service.
-- **Pure engine:** the route, constraint and cost logic in `src/domain/` has no database, network or clock access. That makes it fast to test, lets both the UI and AI tools reuse it, and means the AI layer can't get around it.
-- **Claude API through the Anthropic SDK directly:** with our own tool loop rather than a framework, so the orchestration is explicit and explainable.
+- **Pure engine:** the route, constraint and cost logic in `src/domain/` has no database, network or clock access. That makes it fast to test and independent of the framework and the database.
 - **Easy to move off the current hosts:** only `src/server` and `src/db` talk to Supabase, security rules go through one login helper, and the app uses no Vercel-only services.
