@@ -322,21 +322,21 @@ describe("supabase-store against the real database", () => {
       const row = await a.upsertBudget({
         tripId,
         userId: alice.userId,
-        band: "2k_3k",
-        ceilingMinor: 300000,
+        band: "under_2k", // ignored: the database derives the band from the amount
+        ceilingMinor: 250000,
         currency: "USD",
         flexibilityMinor: 25000,
       });
-      expect(row).toEqual({ tripId, band: "2k_3k", ceilingMinor: 300000, currency: "USD", flexibilityMinor: 25000 });
+      expect(row).toEqual({ tripId, band: "2k_3k", ceilingMinor: 250000, currency: "USD", flexibilityMinor: 25000 });
 
-      const updated = await a.upsertBudget({ tripId, userId: alice.userId, band: "3k_4k", ceilingMinor: 400000, currency: "USD", flexibilityMinor: null });
+      const updated = await a.upsertBudget({ tripId, userId: alice.userId, band: "3k_4k", ceilingMinor: 350000, currency: "USD", flexibilityMinor: null });
       expect(updated.band).toBe("3k_4k");
       expect(await a.getBudget(tripId, alice.userId)).toEqual(updated);
     });
 
-    it("the open-ended band is stored with no ceiling", async () => {
-      const row = await b.upsertBudget({ tripId, userId: bob.userId, band: "4k_plus", ceilingMinor: null, currency: "CAD", flexibilityMinor: null });
-      expect(row).toMatchObject({ band: "4k_plus", ceilingMinor: null, currency: "CAD" });
+    it("a large amount lands in the open-ended band, in the currency it was entered in", async () => {
+      const row = await b.upsertBudget({ tripId, userId: bob.userId, band: "4k_plus", ceilingMinor: 500000, currency: "CAD", flexibilityMinor: null });
+      expect(row).toMatchObject({ band: "4k_plus", ceilingMinor: 500000, currency: "CAD" });
       expect(await b.getBudget(tripId, bob.userId)).toEqual(row);
     });
 
@@ -359,8 +359,17 @@ describe("supabase-store against the real database", () => {
       expect((await a.getBudget(tripId, alice.userId))?.band).toBe("3k_4k");
     });
 
-    it("a budget must have a band or a ceiling, and a sane currency", async () => {
-      await expect(a.upsertBudget({ tripId, userId: alice.userId, band: null as never, ceilingMinor: null, currency: "USD", flexibilityMinor: null })).rejects.toMatchObject({ code: "invalid_input" });
+    it("the group sees each member's band and never an amount, and outsiders see nothing", async () => {
+      const bands = await b.getMemberBands(tripId);
+      expect(bands.map((x) => [x.userId, x.band]).sort()).toEqual([[alice.userId, "3k_4k"], [bob.userId, "4k_plus"]].sort());
+      expect(JSON.stringify(bands)).not.toMatch(/ceiling|amount|350000|500000/);
+      expect(await a.getMemberBands(tripId)).toHaveLength(2);
+      expect(await c.getMemberBands(tripId)).toEqual([]);
+      await expect(anon.getMemberBands(tripId)).rejects.toMatchObject({ code: "forbidden" });
+    });
+
+    it("rejects a negative amount and a malformed currency", async () => {
+      await expect(a.upsertBudget({ tripId, userId: alice.userId, band: "2k_3k", ceilingMinor: -1, currency: "USD", flexibilityMinor: null })).rejects.toMatchObject({ code: "invalid_input" });
       await expect(a.upsertBudget({ tripId, userId: alice.userId, band: "2k_3k", ceilingMinor: 300000, currency: "usd", flexibilityMinor: null })).rejects.toMatchObject({ code: "invalid_input" });
     });
   });
