@@ -6,8 +6,6 @@ import { readCode } from "../helpers/mailpit";
 // Mailpit), the /welcome name form, the trips page, then sign out.
 
 test("sign in with an emailed code, name yourself on /welcome, sign out", async ({ page }) => {
-  page.on("console", (m) => console.log("[console]", m.type(), m.text()));
-  page.on("response", (r) => console.log("[response]", r.request().method(), r.url(), r.status()));
   const email = `browser-${randomUUID().slice(0, 8)}@example.test`;
 
   // Signed out, /welcome sends you to sign in.
@@ -32,13 +30,7 @@ test("sign in with an emailed code, name yourself on /welcome, sign out", async 
   // The real code signs in. A new account has no name yet, so it lands on /welcome.
   await codeInput.fill(code);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  page.on("request", (r) => console.log("[request]", r.method(), r.url(), JSON.stringify(r.headers()["rsc"] ?? "")));
-  page.on("requestfailed", (r) => console.log("[requestfailed]", r.url(), r.failure()?.errorText));
-  await page.waitForTimeout(8000);
-  console.log("[diag] url", page.url(), JSON.stringify(await page.context().cookies()).slice(0, 400));
-  const direct = await page.request.get("/auth/continue?next=%2Fwelcome", { maxRedirects: 0, timeout: 10_000 }).catch((e) => String(e));
-  console.log("[diag] direct", typeof direct === "string" ? direct : `${direct.status()} ${direct.headers()["location"]}`);
-  await expect(page).toHaveURL(/\/welcome/, { timeout: 20_000 });
+  await expect(page).toHaveURL(/\/welcome/);
   await expect(page.getByRole("heading", { name: "Welcome to Layover" })).toBeVisible();
 
   // Whitespace only is not a name: the server rejects it and shows the message.

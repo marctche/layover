@@ -11,6 +11,8 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("LAYOVER_TEST_SUPABASE_URL and LAYOVER_TEST_SUPABASE_KEY must be set for the browser tests.");
 }
 
+// localhost, not 127.0.0.1: the server builds redirect URLs from its own hostname (localhost), and a
+// browser on another host would lose its session cookie across that redirect.
 const PORT = 3000;
 
 export default defineConfig({
@@ -22,14 +24,14 @@ export default defineConfig({
   timeout: 60_000,
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
   use: {
-    baseURL: `http://127.0.0.1:${PORT}`,
+    baseURL: `http://localhost:${PORT}`,
     trace: "retain-on-failure",
   },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
   webServer: {
     // NEXT_PUBLIC_* values are read at build time, so the build gets them too.
-    command: `pnpm build && pnpm exec next start -H 127.0.0.1 -p ${PORT}`,
-    url: `http://127.0.0.1:${PORT}`,
+    command: `pnpm build && pnpm exec next start -p ${PORT}`,
+    url: `http://localhost:${PORT}`,
     timeout: 300_000,
     reuseExistingServer: !process.env.CI,
     env: {
